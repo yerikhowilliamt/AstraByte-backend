@@ -32,17 +32,53 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
   async get(@Auth() user: User): Promise<WebResponse<UserResponse>> {
-    this.logger.info(`USER CONTROLLER | GET user: ${user.email}`);
-    return this.toUserResponse(await this.userService.get(user), 200);
+    const logData = {
+      action: 'GET',
+      timestamp: new Date().toISOString()
+    }
+
+    this.logger.info(`USER CONTROLLER | GET user_email: ${user.email}`);
+    try {
+      const result = await this.userService.get(user);
+
+      this.logger.info('Retrive user successfully', {
+        ...logData,
+        user_id: result.id
+      })
+      return this.toUserResponse(result, 200)
+    } catch (error) {
+      this.logger.error(`Failed to retrive user data: ${error.message}`, {
+        ...logData,
+        user_id: user.id
+      })
+      throw error
+    }
   }
 
   @Patch()
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
   async update(@Auth() user: User, @Body() request: UpdateUserRequest): Promise<WebResponse<UserResponse>> {
+    const logData = {
+      action: 'UPDATE',
+      timestamp: new Date().toISOString()
+    }
+    
     this.logger.info(`USER CONTROLLER | UPDATE user: ${user.email}, request: ${JSON.stringify(request)}`);
+    try {
+      const result = await this.userService.update(user, request);
 
-    const result = await this.userService.update(user, request);
-    return this.toUserResponse(result, 200);
+      this.logger.info('Update user successfully', {
+        ...logData,
+        user_id: result.id
+      })
+      return this.toUserResponse(result, 200);
+    } catch (error) {
+      this.logger.error(`Failed to update user data: ${ error.message }`, {
+        ...logData,
+        user_id: user.id
+      })
+      throw error
+    }
   }
 }

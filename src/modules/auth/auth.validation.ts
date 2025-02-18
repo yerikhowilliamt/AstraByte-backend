@@ -15,6 +15,7 @@ export class AuthValidation {
     email: z.string().email(),
     name: z.string().min(1),
     image: z.string().min(1),
+    emailVerified: z.boolean().optional(),
     accessToken: z.string().min(1),
     refreshToken: z.string().min(1).optional(),
     provider: z.string().min(1),

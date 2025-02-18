@@ -31,93 +31,6 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  private async checkExistingUser(email: string) {
-    try {
-      const user = await this.prismaService.user.count({
-        where: { email },
-      });
-
-      if (user) {
-        this.logger.warn('Email already registered');
-        throw new BadRequestException('This email is already registered.');
-      }
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
-      this.logger.error('Error checking if email exists', { error });
-      throw new InternalServerErrorException(error);
-    }
-  }
-
-  async findUserByEmail(email: string): Promise<User | null> {
-    const user = await this.prismaService.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid email or password.');
-    }
-
-    return user;
-  }
-
-  async findUserById(id: number): Promise<UserResponse> {
-    try {
-      const user = await this.prismaService.user.findUnique({
-        where: { id },
-      });
-
-      if (!user) {
-        throw new NotFoundException('User not found.');
-      }
-
-      return {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt.toISOString(),
-        updatedAt: user.updatedAt.toISOString(),
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-
-      throw new InternalServerErrorException(error);
-    }
-  }
-
-  async findAccount(providerAccountId: string): Promise<Account | null> {
-    const account = await this.prismaService.account.findUnique({
-      where: { providerAccountId },
-    });
-
-    return account;
-  }
-
-  private generateAccessToken(userId: number, email: string): string {
-    return this.jwtService.sign(
-      { id: userId, email },
-      {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: '15m',
-      },
-    );
-  }
-
-  private generateRefreshToken(userId: number, email: string): string {
-    return this.jwtService.sign(
-      { id: userId, email },
-      {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: '30d'
-      },
-    );
-  }
-
   async register(request: RegisterAuthRequest): Promise<UserResponse> {
     this.logger.info(
       `AUTH SERVICE | REGISTER : Create new user: { name: ${request.name}, email: ${request.email} }`,
@@ -223,7 +136,8 @@ export class AuthService {
   }
 
   async validate(request: ValidateAuthRequest): Promise<Account | null> {
-    this.logger.info(`AUTH SERVICE | Validate request: ${request}`);
+    this.logger.info(`AUTH SERVICE | Validate request: ${ request }`);
+
     try {
       const validateRequest: ValidateAuthRequest =
         await this.validationService.validate(
@@ -258,8 +172,14 @@ export class AuthService {
         this.logger.debug(`New account created: ${account}`);
       }
 
-      const accessToken = await this.generateAccessToken(account.userId, validateRequest.email);
-      const refreshToken = await this.generateRefreshToken(account.userId, validateRequest.email);
+      const accessToken = await this.generateAccessToken(
+        account.userId,
+        validateRequest.email,
+      );
+      const refreshToken = await this.generateRefreshToken(
+        account.userId,
+        validateRequest.email,
+      );
 
       this.logger.debug(
         `Generate tokens: access_token: ${accessToken}, refresh_token: ${refreshToken}`,
@@ -290,24 +210,116 @@ export class AuthService {
   async generateNewAccessToken(userId: number, refreshToken: string) {
     try {
       const user = await this.prismaService.user.findUnique({
-        where: {id: userId}
+        where: { id: userId },
       });
 
       if (user.refreshToken !== refreshToken) {
         throw new UnauthorizedException('Invalid refresh token.');
       }
 
-      const newAccessToken = this.generateAccessToken(user.id, user.email)
-      
+      const newAccessToken = this.generateAccessToken(user.id, user.email);
+
       return {
-        accessToken: newAccessToken
-      }
+        accessToken: newAccessToken,
+      };
     } catch (error) {
       if (error instanceof UnauthorizedException) {
-        throw error
+        throw error;
       }
       this.logger.error('Error during generate access token', { error });
-      throw new InternalServerErrorException('Generate access token failed. Please try again.')
+      throw new InternalServerErrorException(
+        'Generate access token failed. Please try again.',
+      );
     }
+  }
+
+  private async checkExistingUser(email: string) {
+    try {
+      const user = await this.prismaService.user.count({
+        where: { email },
+      });
+
+      if (user) {
+        this.logger.warn('Email already registered');
+        throw new BadRequestException('This email is already registered.');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      this.logger.error('Error checking if email exists', { error });
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  async findUserByEmail(email: string): Promise<User | null> {
+    const user = await this.prismaService.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    return user;
+  }
+
+  async findUserById(id: number): Promise<UserResponse> {
+    try {
+      const user = await this.prismaService.user.findUnique({
+        where: { id },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found.');
+      }
+
+      const accessToken = this.generateAccessToken(user.id, user.email)
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        accessToken,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  async findAccount(providerAccountId: string): Promise<Account | null> {
+    const account = await this.prismaService.account.findUnique({
+      where: { providerAccountId },
+    });
+
+    return account;
+  }
+
+  private generateAccessToken(userId: number, email: string): string {
+    return this.jwtService.sign(
+      { id: userId, email },
+      {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '15m',
+      },
+    );
+  }
+
+  private generateRefreshToken(userId: number, email: string): string {
+    return this.jwtService.sign(
+      { id: userId, email },
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: '30d',
+      },
+    );
   }
 }
