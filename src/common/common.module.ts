@@ -11,16 +11,30 @@ import * as winston from 'winston';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
 import { ValidationService } from './validation.service';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ErrorFilter } from './error.filter';
 import { JwtModule } from '@nestjs/jwt';
+import { LoggingInterceptor } from './interceptors/logging.interceptor';
+import { LoggerService } from './logger.service';
 
 @Global()
 @Module({
   imports: [
     WinstonModule.forRoot({
-      format: winston.format.json(),
-      transports: [new winston.transports.Console()],
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.json()
+      ),
+      transports: [
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.printf(({ level, message, timestamp, ...meta }) => {
+              return `[${timestamp}] ${level}: ${message} ${JSON.stringify(meta)}`;
+            })
+          ),
+        }),
+      ],
     }),
     ConfigModule.forRoot({
       isGlobal: true,
@@ -43,8 +57,13 @@ import { JwtModule } from '@nestjs/jwt';
       provide: APP_FILTER,
       useClass: ErrorFilter,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+    LoggerService
   ],
-  exports: [PrismaService, ValidationService],
+  exports: [PrismaService, ValidationService, LoggerService],
 })
 export class CommonModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

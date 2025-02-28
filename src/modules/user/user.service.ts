@@ -95,6 +95,26 @@ export class UserService {
     }
   }
 
+  async logout(user: User): Promise<{ message: string; success: boolean }> {
+    try {
+      await this.prismaService.user.update({
+        where: { email: user.email },
+        data: { refreshToken: null },
+      });
+
+      this.logger.info(
+        `USER SERVICE | LOGOUT : User with email: ${user.email} has logged out`,
+      );
+
+      return {
+        message: 'Log out successful',
+        success: true,
+      };
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   private async updatedUserData(
     updateRequest: UpdateUserRequest
   ): Promise<Partial<User>> {

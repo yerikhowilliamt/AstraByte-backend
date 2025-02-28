@@ -3,15 +3,12 @@ import {
   Controller,
   Get,
   HttpCode,
-  Inject,
   Post,
   Req,
   Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
-import { Logger } from 'winston';
 import { AuthService } from './auth.service';
 import WebResponse, { Paging } from '../../models/web.model';
 import { RegisterAuthRequest } from './dto/register-auth.dto';
@@ -19,22 +16,17 @@ import { UserResponse } from '../../models/user.model';
 import { LocalAuthGuard } from './guards/local.guard';
 import { LoginAuthRequest } from './dto/login-auth.dto';
 import { Request, Response } from 'express';
-import { JwtAuthGuard } from './guards/jwt.guard';
-import { User } from '@prisma/client';
 import { GoogleAuthGuard } from './guards/google.guard';
+import { LoggerService } from '../../common/logger.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
-    @Inject(WINSTON_MODULE_PROVIDER) private logger: Logger,
+    private loggerService: LoggerService,
     private authService: AuthService,
   ) {}
 
-  private toAuthResponse<T>(
-    data: T,
-    statusCode: number,
-    paging?: Paging,
-  ): WebResponse<T> {
+  private toAuthResponse<T>(data: T, statusCode: number, paging?: Paging): WebResponse<T> {
     return {
       data,
       statusCode,
@@ -45,23 +37,20 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(201)
-  async register(
-    @Body() request: RegisterAuthRequest,
-  ): Promise<WebResponse<UserResponse>> {
-    const logData = {
-      action: 'CREATE',
-      timestamp: new Date().toISOString(),
-    };
+  async register(@Body() request: RegisterAuthRequest): Promise<WebResponse<UserResponse>> {
     try {
       const result = await this.authService.register(request);
-
-      this.logger.info('User create successfully', {
-        ...logData,
+      this.loggerService.info('AUTH', 'controller', 'Registration new user success', {
         user_id: result.id,
+        response_status: 201
       });
       return this.toAuthResponse(result, 201);
     } catch (error) {
-      this.logger.error('Registration failed', error);
+      this.loggerService.error('AUTH', 'controller', 'Registration failed', {
+        error: error.message,
+        stack: error.stack,
+        response_status: 500
+      })
       throw error;
     }
   }
@@ -69,14 +58,7 @@ export class AuthController {
   @Post('login')
   @UseGuards(LocalAuthGuard)
   @HttpCode(200)
-  async login(
-    @Body() request: LoginAuthRequest,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<WebResponse<UserResponse>> {
-    const logData = {
-      action: 'POST',
-      timestamp: new Date().toISOString(),
-    };
+  async login(@Body() request: LoginAuthRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<UserResponse>> {
     try {
       const result = await this.authService.login(request);
 
@@ -84,20 +66,30 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000, // 15 Menit
+        maxAge: 15 * 60 * 1000,
       });
 
-      const { accessToken, ...data } = result;
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
 
-      this.logger.info('User login successfully', {
-        ...logData,
+      const { accessToken, refreshToken, ...data } = result;
+
+      this.loggerService.info('AUTH', 'controller', 'Login Success', {
         user_id: result.id,
-        access_token: result.accessToken,
-      });
+        response_status: 200
+      })
 
       return this.toAuthResponse(data, 200);
     } catch (error) {
-      this.logger.error('Login failed', error);
+      this.loggerService.error('AUTH', 'controller', 'Login failed', {
+        error: error.message,
+        stack: error.stack,
+        response_status: 500
+      })
       throw error;
     }
   }
@@ -106,14 +98,12 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   @HttpCode(302)
   async googleLogin() {
-    return {
-      message: 'Google Authentication - Redirecting...',
-    };
+    return { message: 'Google Authentication - Redirecting...' };
   }
 
   @Get('google/redirect')
-  @HttpCode(302)
   @UseGuards(GoogleAuthGuard)
+  @HttpCode(200)
   async googleAuthRedirect(@Req() req, @Res() res: Response): Promise<void> {
     try {
       const { user } = req;
@@ -122,94 +112,55 @@ export class AuthController {
         throw new UnauthorizedException('Google authentication failed');
       }
 
-      const userId = user.id;
-      const currentUser = await this.authService.findUserById(userId);
-      const accessToken = currentUser.accessToken;
+      const currentUser = await this.authService.findUserById(user.id);
+      res.cookie('access_token', currentUser.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 15 * 60 * 1000,
+      });
 
-      res
-        .cookie('access_token', accessToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          maxAge: 15 * 60 * 1000, // 15 menit
-        })
-        .redirect('http://localhost:3000');
+      res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
     } catch (error) {
-      this.logger.error(
-        `Failed to login with google account: ${error.message}`,
-      );
+      this.loggerService.error('AUTH', 'controller', 'Failed to login with Google account', {
+        error: error.message,
+        stack: error.stack,
+        response_status: 500
+      })
       throw new UnauthorizedException('Authentication failed');
     }
   }
 
   @Post('new-token')
-  @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  async newAccessToken(
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    const logData = {
-      action: 'CREATE',
-      timestamp: new Date().toISOString(),
-    };
-
+  async newToken(@Req() req: Request, @Res() res: Response) {
     try {
-      const user = req.user as User;
-      const result = await this.authService.generateNewAccessToken(
-        user.id,
-        req.body.refreshToken,
-      );
+      const refreshToken = req.cookies?.refresh_token;
 
-      this.logger.info('Create new access token successfully', {
-        ...logData,
-        user_id: user.id,
-        new_token: result.accessToken,
-      });
+      if (!refreshToken) {
+        throw new UnauthorizedException('Refresh token not found');
+      }
+
+      const result = await this.authService.generateNewAccessToken(refreshToken);
 
       res.cookie('access_token', result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000, // 15 menit
+        maxAge: 15 * 60 * 1000,
       });
+
+      this.loggerService.info('AUTH', 'controller', 'Created new access token success', {
+        response_status: 200
+      })
+
+      return res.json(this.toAuthResponse({ message: 'Created new token successfully' }, 200));
     } catch (error) {
-      this.logger.error(
-        `Failed to generate new access token: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  @Post('logout')
-  @HttpCode(200)
-  logout(
-    @Res({ passthrough: true }) res: Response,
-  ): WebResponse<{ message: string; success: boolean }> {
-    const logData = {
-      action: 'DELETE',
-      timestamp: new Date().toISOString(),
-    };
-    try {
-      res.clearCookie('accessToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-      });
-
-      this.logger.info('User logout successfully', {
-        ...logData,
-      });
-
-      return this.toAuthResponse(
-        {
-          message: 'Logout successful',
-          success: true,
-        },
-        200,
-      );
-    } catch (error) {
-      this.logger.error(`Failed to logout: ${error}`);
+      this.loggerService.error('AUTH', 'controller', 'Failed to generate new access token', {
+        error: error.message,
+        stack: error.stack,
+        response_status: 500
+      })
       throw error;
     }
   }

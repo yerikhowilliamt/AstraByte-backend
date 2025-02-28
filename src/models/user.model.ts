@@ -4,6 +4,7 @@ export class UserResponse {
   email: string;
   emailVerified?: string;
   accessToken?: string;
+  refreshToken?: string;
   image?: string;
   role: string;
   createdAt: string;

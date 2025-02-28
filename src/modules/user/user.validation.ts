@@ -16,19 +16,6 @@ export class UserValidation {
       })
       .max(100)
       .optional(),
-    address: z
-      .string()
-      .min(1, {
-        message: 'Address cannot be empty.',
-      })
-      .optional(),
-    phone: z
-      .string()
-      .min(10, {
-        message: 'Phone number must be at least 10 characters long.',
-      })
-      .max(20)
-      .optional(),
     role: z.enum(['ADMIN', 'CUSTOMER']).optional(),
   });
 }

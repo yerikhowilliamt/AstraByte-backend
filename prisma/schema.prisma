@@ -32,6 +32,7 @@ model User {
   updatedAt           DateTime    @updatedAt                      @map("updated_at")
 
   accounts            Account[]
+  contacts            Contact[]
 
   @@map("users")
 }
@@ -52,4 +53,18 @@ model Account {
   @@index([providerAccountId])
   @@unique([provider, providerAccountId])
   @@map("accounts")
+}
+
+model Contact {
+  id                  Int         @id                @default(autoincrement())
+  userId              Int                            @map("user_id")
+  phone               String      @db.VarChar(20)
+
+  createdAt           DateTime    @default(now())    @map("created_at")
+  updatedAt           DateTime    @updatedAt         @map("updated_at")
+
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("contacts")
 }

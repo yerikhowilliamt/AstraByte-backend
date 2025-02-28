@@ -10,21 +10,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
-          console.log('Cookies:', request.cookies); // 🔹 Debug log
           if (!request?.cookies?.access_token) {
-            console.error('No token found in cookies');
-            throw new UnauthorizedException('No token found in cookies');
+            return null
           }
-          console.log('Token founded:', request.cookies.access_token); // 🔹 Log token
           return request.cookies.access_token;
         },
-      ]), // 🚀 Hapus koma ekstra di sini
+      ]),
+      ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_ACCESS_SECRET'),
     });
   }
 
   async validate(payload: any) {
-    console.log('Payload dari JWT:', payload);
     return { payload };
   }
 }
