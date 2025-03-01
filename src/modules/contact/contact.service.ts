@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Contact, User } from '@prisma/client';
@@ -13,7 +12,7 @@ import { ContactValidation } from './contact.validation';
 import WebResponse from '../../models/web.model';
 import { UpdateContactRequest } from './dto/update-contact.dto';
 import { LoggerService } from '../../common/logger.service';
-import { handleErrorService } from 'src/common/handle-error.service';
+import { handleErrorService } from '../../common/handle-error.service';
 
 @Injectable()
 export class ContactService {

@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import WebResponse, { Paging } from '../../models/web.model';
+import WebResponse, { response } from '../../models/web.model';
 import { RegisterAuthRequest } from './dto/register-auth.dto';
 import { UserResponse } from '../../models/user.model';
 import { LocalAuthGuard } from './guards/local.guard';
@@ -18,22 +18,15 @@ import { LoginAuthRequest } from './dto/login-auth.dto';
 import { Request, Response } from 'express';
 import { GoogleAuthGuard } from './guards/google.guard';
 import { LoggerService } from '../../common/logger.service';
+import { handleErrorService } from '../../common/handle-error.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private loggerService: LoggerService,
     private authService: AuthService,
+    private handleErrorService: handleErrorService
   ) {}
-
-  private toAuthResponse<T>(data: T, statusCode: number, paging?: Paging): WebResponse<T> {
-    return {
-      data,
-      statusCode,
-      timestamp: new Date().toString(),
-      ...(paging ? { paging } : {}),
-    };
-  }
 
   @Post('register')
   @HttpCode(201)
@@ -44,14 +37,9 @@ export class AuthController {
         user_id: result.id,
         response_status: 201
       });
-      return this.toAuthResponse(result, 201);
+      return response(result, 201);
     } catch (error) {
-      this.loggerService.error('AUTH', 'controller', 'Registration failed', {
-        error: error.message,
-        stack: error.stack,
-        response_status: 500
-      })
-      throw error;
+      this.handleErrorService.controller(error, 'AUTH')
     }
   }
 
@@ -83,14 +71,9 @@ export class AuthController {
         response_status: 200
       })
 
-      return this.toAuthResponse(data, 200);
+      return response(data, 200);
     } catch (error) {
-      this.loggerService.error('AUTH', 'controller', 'Login failed', {
-        error: error.message,
-        stack: error.stack,
-        response_status: 500
-      })
-      throw error;
+      this.handleErrorService.controller(error, 'AUTH')
     }
   }
 
@@ -122,12 +105,7 @@ export class AuthController {
 
       res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
     } catch (error) {
-      this.loggerService.error('AUTH', 'controller', 'Failed to login with Google account', {
-        error: error.message,
-        stack: error.stack,
-        response_status: 500
-      })
-      throw new UnauthorizedException('Authentication failed');
+      this.handleErrorService.controller(error, 'AUTH')
     }
   }
 
@@ -154,14 +132,9 @@ export class AuthController {
         response_status: 200
       })
 
-      return res.json(this.toAuthResponse({ message: 'Created new token successfully' }, 200));
+      return res.json(response({ message: 'Created new token successfully' }, 200));
     } catch (error) {
-      this.loggerService.error('AUTH', 'controller', 'Failed to generate new access token', {
-        error: error.message,
-        stack: error.stack,
-        response_status: 500
-      })
-      throw error;
+      this.handleErrorService.controller(error, 'AUTH')
     }
   }
 }

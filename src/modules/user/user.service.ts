@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../common/prisma.service';
 import { ValidationService } from '../../common/validation.service';
@@ -7,6 +7,7 @@ import { UserResponse } from '../../models/user.model';
 import { UpdateUserRequest } from './dto/update-user.dto';
 import { UserValidation } from './user.validation';
 import { LoggerService } from '../../common/logger.service';
+import { handleErrorService } from '../../common/handle-error.service';
 
 @Injectable()
 export class UserService {
@@ -14,6 +15,7 @@ export class UserService {
     private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
+    private handleErrorService: handleErrorService
   ) { }
   
   private toUserResponse(user: User): UserResponse {
@@ -26,26 +28,6 @@ export class UserService {
       createdAt: user.createdAt.toString(),
       updatedAt: user.updatedAt.toString(),
     };
-  }
-
-  private handleError(
-    error: Error,
-    message: string,
-    details?: object,
-  ): never {
-    this.loggerService.error('AUTH', 'service', message, {
-      ...details,
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    });
-
-    if (error instanceof UnauthorizedException) {
-      throw error;
-    }
-    if (error instanceof NotFoundException) {
-      throw error;
-    }
-    throw new InternalServerErrorException(error);
   }
 
   async get(user: User): Promise<UserResponse> {
@@ -68,7 +50,7 @@ export class UserService {
 
       return this.toUserResponse(currentUser);
     } catch (error) {
-      this.handleError(error, 'Error during fetching user data');
+      this.handleErrorService.service(error, 'USER', 'Error during fetching user data');
     }
   }
 
@@ -85,7 +67,7 @@ export class UserService {
     });
 
     try {
-      const updateRequest: UpdateUserRequest = await this.validationService.validate(
+      const updateRequest: UpdateUserRequest = this.validationService.validate(
         UserValidation.UPDATE,
         request,
       );
@@ -113,7 +95,7 @@ export class UserService {
 
       return this.toUserResponse(updatedUser);
     } catch (error) {
-      this.handleError(error, 'Error updating user data', {
+      this.handleErrorService.service(error, 'USER', 'Error updating user data', {
         user_id: user.id
       });
     }
@@ -136,7 +118,7 @@ export class UserService {
         success: true,
       };
     } catch (error) {
-      this.handleError(error, 'Error during logout', {
+      this.handleErrorService.service(error, 'USER', 'Error during logout', {
         user_id: user.id
       });
     }

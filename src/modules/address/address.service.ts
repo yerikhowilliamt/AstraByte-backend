@@ -1,19 +1,18 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Address, User } from '@prisma/client';
-import { LoggerService } from 'src/common/logger.service';
-import { PrismaService } from 'src/common/prisma.service';
-import { ValidationService } from 'src/common/validation.service';
-import { ZodError } from 'zod';
+import { LoggerService } from '../../common/logger.service';
+import { PrismaService } from '../../common/prisma.service';
+import { ValidationService } from '../../common/validation.service';
 import { CreateAddressRequest } from './dto/create-address.dto';
-import { AddressResponse } from 'src/models/address.model';
+import { AddressResponse } from '../../models/address.model';
 import { AddressValidation } from './address.validation';
-import WebResponse from 'src/models/web.model';
+import WebResponse from '../../models/web.model';
 import { UpdateAddressRequest } from './dto/update-address.dto';
+import { handleErrorService } from '../../common/handle-error.service';
 
 @Injectable()
 export class AddressService {
@@ -21,6 +20,7 @@ export class AddressService {
     private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
+    private handleErrorService: handleErrorService
   ) {}
 
   private toAddressResponse(address: Address) {
@@ -86,7 +86,7 @@ export class AddressService {
         await this.setPrimaryAddress(address, user.id),
       );
     } catch (error) {
-      this.handleError(error, 'Error creating address', {
+      this.handleErrorService.service(error, 'ADDRESS', 'Error creating address', {
         user_id: user.id,
       });
     }
@@ -146,7 +146,11 @@ export class AddressService {
         },
       };
     } catch (error) {
-      this.handleError(error, 'Error fetching addresses');
+      this.handleErrorService.service(error, 'ADDRESS', 'Error fetching addresses', {
+        user_id: user.id,
+        limit,
+        page
+      });
     }
   }
 
@@ -175,7 +179,7 @@ export class AddressService {
       this.loggerService.info(
         'ADDRESS',
         'service',
-        'Primary address retrieved successfully',
+        'Primary address fetched successfully',
         {
           user_id: user.id,
           address_id: address.id,
@@ -184,7 +188,9 @@ export class AddressService {
 
       return this.toAddressResponse(address);
     } catch (error) {
-      this.handleError(error, 'Error fetching primary address');
+      this.handleErrorService.service(error, 'ADDRESS', 'Error fetching primary address', {
+        user_id: user.id
+      });
     }
   }
 
@@ -240,7 +246,7 @@ export class AddressService {
         await this.setPrimaryAddress(address, user.id),
       );
     } catch (error) {
-      this.handleError(error, 'Error updating, contact', {
+      this.handleErrorService.service(error, 'ADDRESS', 'Error updating contact', {
         user_id: user.id,
         address_id: addressId,
       });
@@ -263,7 +269,7 @@ export class AddressService {
       this.loggerService.info(
         'ADDRESS',
         'service',
-        'Deleting address success',
+        'Address deleted successfully',
         {
           user_id: address.userId,
           address_id: address.id,
@@ -272,7 +278,7 @@ export class AddressService {
 
       return { message: 'Address successfully deleted', success: true };
     } catch (error) {
-      this.handleError(error, 'Error deleting address', {
+      this.handleErrorService.service(error, 'ADDRESS', 'Error deleting address', {
         user_id: user.id,
         address_id: id,
       });
@@ -430,23 +436,5 @@ export class AddressService {
     }
 
     return address;
-  }
-
-  private handleError(error: Error, message: string, details?: object): never {
-    this.loggerService.error('ADDRESS', 'service', message, {
-      ...details,
-      error: error.message,
-    });
-    if (error instanceof ZodError) {
-      throw new BadRequestException(error.message);
-    } else if (error instanceof BadRequestException) {
-      throw error;
-    } else if (error instanceof NotFoundException) {
-      throw error;
-    } else {
-      throw new InternalServerErrorException(
-        'An unexpected error occurred. Please try again.',
-      );
-    }
   }
 }

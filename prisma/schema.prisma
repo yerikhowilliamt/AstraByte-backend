@@ -34,6 +34,7 @@ model User {
   accounts            Account[]
   contacts            Contact[]
   addresses           Address[]
+  stores              Store[]
 
   @@map("users")
 }
@@ -87,4 +88,18 @@ model Address {
 
   @@index([userId, street])
   @@map("addresses")
+}
+
+model Store {
+  id                  Int         @id                @default(autoincrement())
+  userId              Int                            @map("user_id")
+  name                String
+
+  createdAt           DateTime    @default(now())    @map("created_at")
+  updatedAt           DateTime    @updatedAt         @map("updated_at")
+
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("stores")
 }

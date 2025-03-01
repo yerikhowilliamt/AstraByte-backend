@@ -33,17 +33,14 @@ export class AuthService {
     this.loggerService.info('AUTH', 'service', 'Create user initiated')
 
     try {
-      // Validasi request
       const registerRequest: RegisterAuthRequest =
         this.validationService.validate(AuthValidation.REGISTER, request);
 
       await this.checkExistingUser(registerRequest.email);
 
-      // Hashing password
       const hashedPassword = await bcrypt.hash(registerRequest.password, 10);
       registerRequest.password = hashedPassword;
 
-      // Buat user baru
       const user = await this.prismaService.user.create({
         data: {
           name: registerRequest.name,
@@ -73,7 +70,6 @@ export class AuthService {
       } else {
         this.loggerService.error('AUTH', 'service', 'Error during registration', {
           error: error.message,
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         });
 
         throw new InternalServerErrorException(
@@ -87,7 +83,6 @@ export class AuthService {
     this.loggerService.info('AUTH', 'service', 'User login attempt')
 
     try {
-      // Validasi request
       const loginRequest: LoginAuthRequest = this.validationService.validate(
         AuthValidation.LOGIN,
         request,
@@ -95,7 +90,6 @@ export class AuthService {
 
       const user = await this.findUserByEmail(loginRequest.email);
 
-      // Compare password
       const isPasswordValid = await bcrypt.compare(
         loginRequest.password,
         user.password,
@@ -110,7 +104,6 @@ export class AuthService {
 
       const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
-      // Menyimpan refresh token yang sudah di hash di database
       await this.prismaService.user.update({
         where: { email: user.email },
         data: { refreshToken: hashedRefreshToken },
@@ -142,7 +135,6 @@ export class AuthService {
       } else {
         this.loggerService.error('AUTH', 'service', 'Error during login', {
           error: error.message,
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         });
         throw new InternalServerErrorException(
           'Login failed. Please try again.',
@@ -248,7 +240,6 @@ export class AuthService {
       } else {
         this.loggerService.error('AUTH', 'service', 'Error during validation', {
           error: error.message,
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         })
         throw new InternalServerErrorException('Validation failed. Please try again');
       }
@@ -308,8 +299,7 @@ export class AuthService {
       }
 
       this.loggerService.error('AUTH', 'service', 'Error during generate access token', {
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        error: error.message
       })
 
       throw new InternalServerErrorException(
@@ -334,8 +324,7 @@ export class AuthService {
       }
 
       this.loggerService.error('AUTH', 'service', 'Error checking if email exists', {
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        error: error.message
       })
       throw new InternalServerErrorException(error);
     }
@@ -387,8 +376,7 @@ export class AuthService {
       }
 
       this.loggerService.error('AUTH', 'service', 'Error finding user by their id', {
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        error: error.message
       })
       throw new InternalServerErrorException(error);
     }

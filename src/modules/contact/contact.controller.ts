@@ -20,7 +20,7 @@ import { CreateContactRequest } from './dto/create-contact.dto';
 import { ContactResponse } from '../../models/contact.model';
 import { UpdateContactRequest } from './dto/update-contact.dto';
 import { LoggerService } from '../../common/logger.service';
-import { handleErrorService } from 'src/common/handle-error.service';
+import { handleErrorService } from '../../common/handle-error.service';
 
 @Controller('users/:userId/contacts')
 export class ContactController {
@@ -41,7 +41,9 @@ export class ContactController {
       phone: request.phone
     });
 
-    this.loggerService.info('CONTACT', 'controller', 'Created new contact initiated')
+    this.loggerService.info('CONTACT', 'controller', 'Created new contact initiated', {
+      user_id: userId,
+    })
 
     try {
       this.checkAuthorization(userId, user);
@@ -53,6 +55,7 @@ export class ContactController {
         contact_id: result.id,
         response_status: 201,
       });
+      
       return response(result, 201);
     } catch (error) {
       this.handleErrorService.controller(error, 'CONTACT');

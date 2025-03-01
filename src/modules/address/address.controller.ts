@@ -1,13 +1,13 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
-import { LoggerService } from 'src/common/logger.service';
+import { LoggerService } from '../../common/logger.service';
 import { AddressService } from './address.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
-import WebResponse, { response } from 'src/models/web.model';
-import { AddressResponse } from 'src/models/address.model';
+import WebResponse, { response } from '../../models/web.model';
+import { AddressResponse } from '../../models/address.model';
 import { CreateAddressRequest } from './dto/create-address.dto';
-import { Auth } from 'src/common/auth/auth.decorator';
+import { Auth } from '../../common/auth/auth.decorator';
 import { User } from '@prisma/client';
-import { handleErrorService } from 'src/common/handle-error.service';
+import { handleErrorService } from '../../common/handle-error.service';
 import { UpdateAddressRequest } from './dto/update-address.dto';
 
 @Controller('users/:userId/addresses')
