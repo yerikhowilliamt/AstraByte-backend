@@ -16,6 +16,7 @@ import { ErrorFilter } from './error.filter';
 import { JwtModule } from '@nestjs/jwt';
 import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { LoggerService } from './logger.service';
+import { handleErrorService } from './handle-error.service';
 
 @Global()
 @Module({
@@ -61,9 +62,10 @@ import { LoggerService } from './logger.service';
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
     },
-    LoggerService
+    LoggerService,
+    handleErrorService
   ],
-  exports: [PrismaService, ValidationService, LoggerService],
+  exports: [PrismaService, ValidationService, LoggerService, handleErrorService],
 })
 export class CommonModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -11,3 +11,16 @@ export class Paging {
   total_page: number;
   current_page: number;
 }
+
+export function response<T> (
+  data: T,
+  statusCode: number,
+  paging?: Paging
+): WebResponse<T> {
+  return {
+    data,
+    statusCode,
+    timestamp: new Date().toString(),
+    ...(paging ? { paging } : {}),
+  };
+}

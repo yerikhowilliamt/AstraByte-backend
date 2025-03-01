@@ -10,11 +10,10 @@ import { ValidationService } from '../../common/validation.service';
 import { CreateContactRequest } from './dto/create-contact.dto';
 import { ContactResponse } from '../../models/contact.model';
 import { ContactValidation } from './contact.validation';
-import { ZodError } from 'zod';
 import WebResponse from '../../models/web.model';
 import { UpdateContactRequest } from './dto/update-contact.dto';
-import { randomUUID } from 'crypto';
 import { LoggerService } from '../../common/logger.service';
+import { handleErrorService } from 'src/common/handle-error.service';
 
 @Injectable()
 export class ContactService {
@@ -22,6 +21,7 @@ export class ContactService {
     private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
+    private handleErrorService: handleErrorService
   ) {}
 
   async create(
@@ -29,109 +29,82 @@ export class ContactService {
     request: CreateContactRequest,
   ): Promise<ContactResponse> {
     this.loggerService.info('CONTACT', 'service', 'Create contact initiated', {
-      user_id: user.id
+      user_id: user.id,
     });
-
     try {
       const createRequest = this.validationService.validate(
         ContactValidation.CREATE,
         request,
       );
-
       await this.checkPhoneExists(user.id, createRequest.phone);
-
       const contact = await this.prismaService.contact.create({
-        data: {
-          userId: user.id,
-          phone: createRequest.phone,
-        },
+        data: { userId: user.id, phone: createRequest.phone },
       });
-
-      this.loggerService.info('CONTACT', 'service', 'Create contact success', {
+      this.loggerService.info('CONTACT', 'service', 'Contact created successfully', {
         user_id: user.id,
         contact_id: contact.id,
       });
-
       return this.toContactResponse(contact);
     } catch (error) {
-      this.handleError(error, 'Error creating contact', {
-        user_id: user.id
-      });
+      this.handleErrorService.service(error,'CONTACT', 'Failed to create contact', { user_id: user.id });
     }
   }
 
   async list(
     user: User,
-    page: number = 1,
     limit: number = 10,
+    page: number = 1,
   ): Promise<WebResponse<ContactResponse[]>> {
-    this.loggerService.info('CONTACT', 'service', 'Retrive contacts initiated', {
-      user_id: user.id,
-      page: page,
-      limit: limit,
-    });
-
+    this.loggerService.info(
+      'CONTACT',
+      'service',
+      'Fetching contacts initiated',
+      { user_id: user.id, page, limit },
+    );
     try {
       const currentUser = await this.checkExistingUser(user.id);
-
       const skip = (page - 1) * limit;
-
       const [contacts, total] = await Promise.all([
         this.prismaService.contact.findMany({
           where: { userId: currentUser.id },
-          skip: skip,
+          skip,
           take: limit,
         }),
-        this.prismaService.contact.count({
-          where: { userId: currentUser.id },
-        }),
+        this.prismaService.contact.count({ where: { userId: currentUser.id } }),
       ]);
-
-      if (contacts.length === 0) {
-        throw new NotFoundException('Contacts not found');
-      }
-
-      const totalPage = Math.ceil(total / limit);
-
-      this.loggerService.info('CONTACT', 'service', 'Retrive contacts success', {
+      if (contacts.length === 0)
+        throw new NotFoundException('No contacts found');
+      const totalPages = Math.ceil(total / limit);
+      this.loggerService.info('CONTACT', 'service', 'Contacts fetched successfully', {
         user_id: user.id,
-        total_data: contacts.length,
-        total_page: totalPage,
-        contact_ids: contacts.map((contact) => contact.id).join(','),
+        total_contacts: contacts.length,
+        total_pages: totalPages,
       });
-
       return {
         data: contacts.map(this.toContactResponse),
-        paging: {
-          current_page: page,
-          size: limit,
-          total_page: totalPage,
-        },
+        paging: { current_page: page, size: limit, total_page: totalPages },
       };
     } catch (error) {
-      this.handleError(error, 'Error fetching contact list', {
-        user_id: user.id
-      });
+      this.handleErrorService.service(error,'CONTACT', 'Failed to fetch contacts', { user_id: user.id });
     }
   }
 
   async get(user: User, id: number): Promise<ContactResponse> {
-    this.loggerService.info('CONTACT', 'service', 'Retrive contact initiated', {
-      user_id: user.id,
-      contact_id: id,
-    });
-
+    this.loggerService.info(
+      'CONTACT',
+      'service',
+      'Fetching contact initiated',
+      { user_id: user.id, contact_id: id },
+    );
     try {
       const contact = await this.checkExistingContact(id, user.id);
-
-      this.loggerService.info('CONTACT', 'service', 'Retrive contact success', {
+      this.loggerService.info('CONTACT', 'service', 'Contact fetched successfully', {
         user_id: user.id,
         contact_id: id,
       });
-
       return this.toContactResponse(contact);
     } catch (error) {
-      this.handleError(error, 'Error fetching contact', {
+      this.handleErrorService.service(error,'CONTACT', 'Failed to fetch contact', {
         user_id: user.id,
         contact_id: id,
       });
@@ -143,36 +116,32 @@ export class ContactService {
     contactId: number,
     request: UpdateContactRequest,
   ): Promise<ContactResponse> {
-    this.loggerService.info('CONTACT', 'service', 'Updating contact initiated', {
-      user_id: user.id,
-      contact_id: contactId,
-    });
-
+    this.loggerService.info(
+      'CONTACT',
+      'service',
+      'Updating contact initiated',
+      { user_id: user.id, contact_id: contactId },
+    );
     try {
-      const updateRequest: UpdateContactRequest =
-        this.validationService.validate(ContactValidation.UPDATE, request);
-
+      const updateRequest = this.validationService.validate(
+        ContactValidation.UPDATE,
+        request,
+      );
       let contact = await this.checkExistingContact(contactId, user.id);
-
       await this.checkPhoneExists(user.id, updateRequest.phone, contact.id);
-
       contact = await this.prismaService.contact.update({
         where: { id: contactId },
-        data: {
-          phone: updateRequest.phone,
-        },
+        data: { phone: updateRequest.phone },
       });
-
-      this.loggerService.info('CONTACT', 'service', 'Updated contact success', {
+      this.loggerService.info('CONTACT', 'service', 'Contact updated successfully', {
         user_id: user.id,
         contact_id: contactId,
       });
-
       return this.toContactResponse(contact);
     } catch (error) {
-      this.handleError(error, 'Error updating contact', {
+      this.handleErrorService.service(error,'CONTACT', 'Failed to update contact', {
         user_id: user.id,
-        contact_id: contactId
+        contact_id: contactId,
       });
     }
   }
@@ -181,28 +150,24 @@ export class ContactService {
     user: User,
     id: number,
   ): Promise<{ message: string; success: boolean }> {
-    this.loggerService.info('CONTACT', 'service', 'Deleting contact', {
-      user_id: user.id,
-      contactId: id,
-    });
-
+    this.loggerService.info(
+      'CONTACT',
+      'service',
+      'Deleting contact initiated',
+      { user_id: user.id, contact_id: id },
+    );
     try {
       const contact = await this.checkExistingContact(id, user.id);
-
-      await this.prismaService.contact.delete({
-        where: { id: contact.id },
-      });
-
-      this.loggerService.info('CONTACT', 'service', 'Deleted contact success', {
+      await this.prismaService.contact.delete({ where: { id: contact.id } });
+      this.loggerService.info('CONTACT', 'service', 'Contact deleted successfully', {
         user_id: user.id,
-        contactId: contact.id,
+        contact_id: contact.id,
       });
-
       return { message: 'Contact successfully deleted', success: true };
     } catch (error) {
-      this.handleError(error, 'Error deleting contact', {
+      this.handleErrorService.service(error,'CONTACT', 'Failed to delete contact', {
         user_id: user.id,
-        contactId: id,
+        contact_id: id,
       });
     }
   }
@@ -218,21 +183,11 @@ export class ContactService {
   }
 
   private async checkExistingUser(id: number): Promise<User> {
-    
-    this.loggerService.warn('CONTACT', 'service', 'Chechking user existence', {
-      user_id: id
+    this.loggerService.info('CONTACT', 'service', 'Checking user existence', {
+      user_id: id,
     });
-
-    const user = await this.prismaService.user.findUnique({
-      where: {
-        id,
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
+    const user = await this.prismaService.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
@@ -240,20 +195,16 @@ export class ContactService {
     id: number,
     userId: number,
   ): Promise<Contact> {
-
-    this.loggerService.warn('CONTACT', 'service', 'Checking contact existence', {
-      user_id: userId,
-      contact_id: id,
-    });
-
+    this.loggerService.info(
+      'CONTACT',
+      'service',
+      'Checking contact existence',
+      { user_id: userId, contact_id: id },
+    );
     const contact = await this.prismaService.contact.findFirst({
       where: { id, userId },
     });
-
-    if (!contact) {
-      throw new NotFoundException('Contact not found');
-    }
-
+    if (!contact) throw new NotFoundException('Contact not found');
     return contact;
   }
 
@@ -263,8 +214,8 @@ export class ContactService {
     excludeId?: number,
   ): Promise<void> {
     this.loggerService.warn('CONTACT', 'service', 'Checking phone existence', {
-      user_id: userId
-    })
+      user_id: userId,
+    });
 
     const existingContact = await this.prismaService.contact.findFirst({
       where: {
@@ -276,30 +227,6 @@ export class ContactService {
 
     if (existingContact) {
       throw new BadRequestException('You have already added this phone number');
-    }
-  }
-
-  private handleError(
-    error: Error,
-    message: string,
-    details?: object,
-  ): never {
-    this.loggerService.error('CONTACT', 'service', message, {
-      ...details,
-      error: error.message,
-      stack: error.stack,
-    });
-    if (error instanceof ZodError) {
-      throw new BadRequestException(error);
-    } else if (
-      error instanceof BadRequestException ||
-      error instanceof NotFoundException
-    ) {
-      throw error;
-    } else {
-      throw new InternalServerErrorException(
-        'An unexpected error occurred. Please try again.',
-      );
     }
   }
 }

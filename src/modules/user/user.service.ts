@@ -1,18 +1,17 @@
-import { Inject, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { PrismaService } from '../../common/prisma.service';
 import { ValidationService } from '../../common/validation.service';
-import { Logger } from 'winston'
 import { User } from '@prisma/client';
 import { UserResponse } from '../../models/user.model';
 import { UpdateUserRequest } from './dto/update-user.dto';
 import { UserValidation } from './user.validation';
+import { LoggerService } from '../../common/logger.service';
 
 @Injectable()
 export class UserService {
   constructor(
-    @Inject(WINSTON_MODULE_PROVIDER) private logger: Logger,
+    private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
   ) { }
@@ -29,20 +28,31 @@ export class UserService {
     };
   }
 
-  private handleError(error: any): never {
+  private handleError(
+    error: Error,
+    message: string,
+    details?: object,
+  ): never {
+    this.loggerService.error('AUTH', 'service', message, {
+      ...details,
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
+
     if (error instanceof UnauthorizedException) {
       throw error;
     }
     if (error instanceof NotFoundException) {
       throw error;
     }
-    this.logger.error('Internal Server Error:', error);
     throw new InternalServerErrorException(error);
   }
 
   async get(user: User): Promise<UserResponse> {
     try {
-      this.logger.info(`USER SERVICE | GET : User with email: ${user.email}`);
+      this.loggerService.info('AUTH', 'service', 'Fetching user data initiated', {
+        user_id: user.id
+      });
 
       const currentUser = await this.prismaService.user.findUnique({
         where: { email: user.email },
@@ -52,9 +62,13 @@ export class UserService {
         throw new UnauthorizedException('User not found');
       }
 
+      this.loggerService.info('AUTH', 'service', 'Fetching user data success', {
+        user_id: user.id
+      });
+
       return this.toUserResponse(currentUser);
     } catch (error) {
-      this.handleError(error);
+      this.handleError(error, 'Error during fetching user data');
     }
   }
 
@@ -62,9 +76,13 @@ export class UserService {
     user: User,
     request: UpdateUserRequest,
   ): Promise<UserResponse> {
-    this.logger.info(
-      `USER SERVICE | UPDATE : User ${user.email} trying to update their profile`,
-    );
+    this.loggerService.info('AUTH', 'service', 'Updating user data initiated', {
+      user_id: user.id
+    });
+    this.loggerService.debug('AUTH', 'service', 'Updating user data initiated', {
+      user_id: user.id,
+      request: JSON.stringify(request)
+    });
 
     try {
       const updateRequest: UpdateUserRequest = await this.validationService.validate(
@@ -89,29 +107,38 @@ export class UserService {
         data: updatedUserData,
       });
 
+      this.loggerService.info('AUTH', 'service', 'Updating user data success', {
+        user_id: user.id
+      });
+
       return this.toUserResponse(updatedUser);
     } catch (error) {
-      this.handleError(error);
+      this.handleError(error, 'Error updating user data', {
+        user_id: user.id
+      });
     }
   }
 
   async logout(user: User): Promise<{ message: string; success: boolean }> {
+    this.loggerService.info('AUTH', 'service', 'User logout initiated', {
+      user_id: user.id
+    });
     try {
       await this.prismaService.user.update({
         where: { email: user.email },
         data: { refreshToken: null },
       });
 
-      this.logger.info(
-        `USER SERVICE | LOGOUT : User with email: ${user.email} has logged out`,
-      );
+      this.loggerService.info('AUTH', 'service', 'Logged out success');
 
       return {
         message: 'Log out successful',
         success: true,
       };
     } catch (error) {
-      this.handleError(error);
+      this.handleError(error, 'Error during logout', {
+        user_id: user.id
+      });
     }
   }
 

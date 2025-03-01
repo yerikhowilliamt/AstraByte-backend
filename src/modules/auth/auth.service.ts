@@ -73,7 +73,7 @@ export class AuthService {
       } else {
         this.loggerService.error('AUTH', 'service', 'Error during registration', {
           error: error.message,
-          stack: error.stack,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         });
 
         throw new InternalServerErrorException(
@@ -142,7 +142,7 @@ export class AuthService {
       } else {
         this.loggerService.error('AUTH', 'service', 'Error during login', {
           error: error.message,
-          stack: error.stack,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         });
         throw new InternalServerErrorException(
           'Login failed. Please try again.',
@@ -248,7 +248,7 @@ export class AuthService {
       } else {
         this.loggerService.error('AUTH', 'service', 'Error during validation', {
           error: error.message,
-          stack: error.stack,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         })
         throw new InternalServerErrorException('Validation failed. Please try again');
       }
@@ -309,7 +309,7 @@ export class AuthService {
 
       this.loggerService.error('AUTH', 'service', 'Error during generate access token', {
         error: error.message,
-        stack: error.stack,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       })
 
       throw new InternalServerErrorException(
@@ -335,7 +335,7 @@ export class AuthService {
 
       this.loggerService.error('AUTH', 'service', 'Error checking if email exists', {
         error: error.message,
-        stack: error.stack,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       })
       throw new InternalServerErrorException(error);
     }
@@ -388,7 +388,7 @@ export class AuthService {
 
       this.loggerService.error('AUTH', 'service', 'Error finding user by their id', {
         error: error.message,
-        stack: error.stack,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       })
       throw new InternalServerErrorException(error);
     }
