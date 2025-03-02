@@ -129,7 +129,7 @@ export class AuthController {
       });
 
       this.loggerService.info('AUTH', 'controller', 'Created new access token success', {
-        response_status: 200
+        response_status: 200,
       })
 
       return res.json(response({ message: 'Created new token successfully' }, 200));

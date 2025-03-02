@@ -99,8 +99,8 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password.');
       }
 
-      const accessToken = this.generateAccessToken(user.id, user.email);
-      const refreshToken = this.generateRefreshToken(user.id, user.email);
+      const accessToken = this.generateAccessToken(user.id, user.email, user.role);
+      const refreshToken = this.generateRefreshToken(user.id, user.email, user.role);
 
       const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
@@ -207,14 +207,18 @@ export class AuthService {
         })
       }
 
+      const user = await this.findUserById(account.userId)
+
       const accessToken = this.generateAccessToken(
-        account.userId,
+        user.id,
         validateRequest.email,
+        user.role
       );
 
       const refreshToken = this.generateRefreshToken(
-        account.userId,
+        user.id,
         validateRequest.email,
+        user.role
       );
 
       this.loggerService.debug('AUTH', 'service', 'Generate access token & refresh token', {
@@ -284,7 +288,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const newAccessToken = this.generateAccessToken(user.id, user.email);
+      const newAccessToken = this.generateAccessToken(user.id, user.email, user.role);
       
       this.loggerService.debug('AUTH', 'service', 'Generated new access token success', {
         access_token: newAccessToken
@@ -355,7 +359,7 @@ export class AuthService {
         throw new NotFoundException('User not found.');
       }
 
-      const accessToken = this.generateAccessToken(user.id, user.email);
+      const accessToken = this.generateAccessToken(user.id, user.email, user.role);
 
       this.loggerService.info('AUTH', 'service', 'User found by id', {
         id: user.id,
@@ -394,13 +398,13 @@ export class AuthService {
     return account;
   }
 
-  private generateAccessToken(userId: number, email: string): string {
+  private generateAccessToken(userId: number, email: string, role:string): string {
     this.loggerService.info('AUTH', 'service', 'Successfully created access token. Details: ', {
       user_id: userId,
     })
 
     return this.jwtService.sign(
-      { id: userId, email },
+      { id: userId, email, role },
       {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
         expiresIn: '15m',
@@ -408,13 +412,13 @@ export class AuthService {
     );
   }
 
-  private generateRefreshToken(userId: number, email: string): string {
+  private generateRefreshToken(userId: number, email: string, role: string): string {
     this.loggerService.info('AUTH', 'service', 'Successfully created refresh token. Details: ', {
       user_id: userId,
     })
 
     return this.jwtService.sign(
-      { id: userId, email },
+      { id: userId, email, role },
       {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
         expiresIn: '30d',
