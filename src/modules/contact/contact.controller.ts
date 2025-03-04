@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   Param,
@@ -67,8 +68,8 @@ export class ContactController {
   async list(
     @Auth() user: User,
     @Param('userId', ParseIntPipe) userId: number,
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 10,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
   ): Promise<WebResponse<ContactResponse[]>> {
     this.loggerService.info('CONTACT', 'controller', 'Fetching contacts initiated', {
       user_id: userId,

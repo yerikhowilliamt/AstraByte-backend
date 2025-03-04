@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Post, Put, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { LoggerService } from '../../common/logger.service';
 import { AddressService } from './address.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
@@ -63,8 +63,8 @@ export class AddressController {
   async list(
     @Auth() user: User,
     @Param('userId', ParseIntPipe) userId: number,
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 10,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
   ): Promise<WebResponse<AddressResponse[]>> {
     this.loggerService.info('ADDRESS', 'controller', 'Fetching addresses initiated', {
       user_id: userId,

@@ -9,38 +9,44 @@ export class ErrorFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse();
     const timestamp = new Date().toISOString();
 
-    // Tangani validasi Zod
-    if (exception instanceof ZodError) {
-      const errors = exception.errors.map(err => ({ message: err.message, path: err.path.join('.') }));
-      this.logger.warn(`Validation error: ${errors.map(e => e.message).join(', ')}`);
-      return response.status(400).json({ success: false, errors, timestamp });
-    }
+    const errors = this.formatErrors(exception);
 
-    // Tangani error HTTP
-    if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const responseBody = exception.getResponse();
-
-      let message: string;
-      if (typeof responseBody === 'string') {
-        message = responseBody;
-      } else if (typeof responseBody === 'object' && 'message' in responseBody) {
-        const extractedMessage = (responseBody as { message?: string | string[] }).message;
-        message = Array.isArray(extractedMessage) ? extractedMessage[0] : extractedMessage || 'Bad Request';
-      } else {
-        message = 'Bad Request';
-      }
-
-      this.logger.warn(`HTTP ${status}: ${message}`);
-      return response.status(status).json({ success: false, errors: [{ message }], timestamp });
-    }
-
-    
-    this.logger.error(`Internal Error: ${exception.message}`, exception.stack);
-    response.status(500).json({
+    return response.status(400).json({
       success: false,
-      errors: [{ message: 'Internal server error' }],
+      errors,
       timestamp,
     });
+  }
+
+  private formatErrors(exception: any): { field?: string; message: string }[] {
+    if (exception instanceof HttpException) {
+      return this.handleHttpException(exception);
+    } else if (exception instanceof ZodError) {
+      return this.handleZodError(exception);
+    }
+
+    return [{ message: 'Internal Server Error' }];
+  }
+
+  private handleHttpException(exception: HttpException): { field?: string; message: string }[] {
+    const responseBody = exception.getResponse();
+    this.logger.warn('HttpException detected');
+
+    if (typeof responseBody === 'object' && 'errors' in responseBody) {
+      return (responseBody.errors as any[]).map(err => ({
+        field: err.path?.join('.') || 'unknown',
+        message: err.message,
+      }));
+    }
+
+    return [{ message: responseBody['message'] || 'Bad Request' }];
+  }
+
+  private handleZodError(exception: ZodError): { field: string; message: string }[] {
+    this.logger.warn('ZodValidationException detected');
+    return exception.errors.map(err => ({
+      field: err.path.join('.'),
+      message: err.message,
+    }));
   }
 }

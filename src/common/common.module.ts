@@ -17,6 +17,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { LoggerService } from './logger.service';
 import { handleErrorService } from './handle-error.service';
+import { CloudinaryService } from './cloudinary.service';
+import { CloudinaryProvider } from '../config/cloudinary.config';
 
 @Global()
 @Module({
@@ -24,15 +26,16 @@ import { handleErrorService } from './handle-error.service';
     WinstonModule.forRoot({
       format: winston.format.combine(
         winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        winston.format.json()
+        winston.format.json(),
       ),
       transports: [
         new winston.transports.Console({
+          // level: 'debug',
           format: winston.format.combine(
             winston.format.colorize(),
             winston.format.printf(({ level, message, timestamp, ...meta }) => {
               return `[${timestamp}] ${level}: ${message} ${JSON.stringify(meta)}`;
-            })
+            }),
           ),
         }),
       ],
@@ -63,9 +66,17 @@ import { handleErrorService } from './handle-error.service';
       useClass: LoggingInterceptor,
     },
     LoggerService,
-    handleErrorService
+    handleErrorService,
+    CloudinaryProvider,
+    CloudinaryService,
   ],
-  exports: [PrismaService, ValidationService, LoggerService, handleErrorService],
+  exports: [
+    PrismaService,
+    ValidationService,
+    LoggerService,
+    handleErrorService,
+    CloudinaryService,
+  ],
 })
 export class CommonModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

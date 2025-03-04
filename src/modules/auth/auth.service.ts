@@ -262,6 +262,10 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
 
+      this.loggerService.warn('AUTH', 'service', 'Payload ID', {
+        id: payload.id
+      })
+
       const user = await this.prismaService.user.findUnique({
         where: {
           id: payload.id,

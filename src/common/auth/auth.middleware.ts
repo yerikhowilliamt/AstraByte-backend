@@ -1,5 +1,4 @@
 import {
-  Inject,
   Injectable,
   NestMiddleware,
   UnauthorizedException,
@@ -16,21 +15,27 @@ export class AuthMiddleware implements NestMiddleware {
     private jwtService: JwtService,
     private prismaService: PrismaService,
     private configService: ConfigService,
-    private loggerService: LoggerService
+    private loggerService: LoggerService,
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
+    console.log('Incoming request:', req.url, 'Params:', req.params);
+
     const accessToken = req.cookies?.access_token;
     const refreshToken = req.cookies?.refresh_token;
     this.loggerService.debug('AUTH', 'MIDDLEWARE', 'Tokens', {
       access_token: accessToken,
-      refresh_token: refreshToken
-    })
+      refresh_token: refreshToken,
+    });
 
-    this.loggerService.info('AUTH', 'MIDDLEWARE', 'Middleware executed')
+    this.loggerService.info('AUTH', 'MIDDLEWARE', 'Middleware executed');
 
     if (!accessToken || !refreshToken) {
-      this.loggerService.warn('AUTH', 'MIDDLEWARE', 'Missing access or refresh token')
+      this.loggerService.warn(
+        'AUTH',
+        'MIDDLEWARE',
+        'Missing access or refresh token',
+      );
       throw new UnauthorizedException('Missing access or refresh token');
     }
 
@@ -44,7 +49,11 @@ export class AuthMiddleware implements NestMiddleware {
       });
 
       if (!user) {
-        this.loggerService.warn('AUTH', 'MIDDLEWARE', 'User not found in database')
+        this.loggerService.warn(
+          'AUTH',
+          'MIDDLEWARE',
+          'User not found in database',
+        );
         throw new UnauthorizedException('User not found');
       }
 
@@ -52,9 +61,9 @@ export class AuthMiddleware implements NestMiddleware {
       return next();
     } catch (error) {
       this.loggerService.error('AUTH', 'MIDDLEWARE', 'Invalid access token', {
-          error: error.message,
-          stack: error.stack,
-      })
+        error: error.message,
+        stack: error.stack,
+      });
       throw new UnauthorizedException('Invalid access token');
     }
   }

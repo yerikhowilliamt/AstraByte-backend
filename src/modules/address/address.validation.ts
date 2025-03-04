@@ -13,9 +13,9 @@ const addressFields = {
   country: z.string().min(1, {
     message: 'Country is required'
   }).max(100),
-  postalCode: z.string().min(1, {
-    message: 'Postal code is required'
-  }).max(10),
+  postalCode: z.string().regex(/^\d{5}$/, {
+    message: 'Postal code must be exactly 5 digits'
+  })
 };
 
 export class AddressValidation {

@@ -51,8 +51,8 @@ export class ContactService {
 
   async list(
     user: User,
-    limit: number = 10,
-    page: number = 1,
+    limit: number,
+    page: number,
   ): Promise<WebResponse<ContactResponse[]>> {
     this.loggerService.info(
       'CONTACT',
@@ -97,10 +97,12 @@ export class ContactService {
     );
     try {
       const contact = await this.checkExistingContact(id, user.id);
+
       this.loggerService.info('CONTACT', 'service', 'Contact fetched successfully', {
         user_id: user.id,
         contact_id: id,
       });
+
       return this.toContactResponse(contact);
     } catch (error) {
       this.handleErrorService.service(error,'CONTACT', 'Failed to fetch contact', {
@@ -128,14 +130,17 @@ export class ContactService {
       );
       let contact = await this.checkExistingContact(contactId, user.id);
       await this.checkPhoneExists(user.id, updateRequest.phone, contact.id);
+      
       contact = await this.prismaService.contact.update({
         where: { id: contactId },
         data: { phone: updateRequest.phone },
       });
+
       this.loggerService.info('CONTACT', 'service', 'Contact updated successfully', {
         user_id: user.id,
         contact_id: contactId,
       });
+
       return this.toContactResponse(contact);
     } catch (error) {
       this.handleErrorService.service(error,'CONTACT', 'Failed to update contact', {
@@ -158,10 +163,12 @@ export class ContactService {
     try {
       const contact = await this.checkExistingContact(id, user.id);
       await this.prismaService.contact.delete({ where: { id: contact.id } });
+      
       this.loggerService.info('CONTACT', 'service', 'Contact deleted successfully', {
         user_id: user.id,
         contact_id: contact.id,
       });
+      
       return { message: 'Contact successfully deleted', success: true };
     } catch (error) {
       this.handleErrorService.service(error,'CONTACT', 'Failed to delete contact', {

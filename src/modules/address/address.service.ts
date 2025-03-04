@@ -94,8 +94,8 @@ export class AddressService {
 
   async list(
     user: User,
-    limit: number = 5,
-    page: number = 1,
+    limit: number,
+    page: number,
   ): Promise<WebResponse<AddressResponse[]>> {
     this.loggerService.info(
       'ADDRESS',

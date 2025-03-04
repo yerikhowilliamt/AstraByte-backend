@@ -47,6 +47,10 @@ export class AuthController {
   @UseGuards(LocalAuthGuard)
   @HttpCode(200)
   async login(@Body() request: LoginAuthRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<UserResponse>> {
+    this.loggerService.info('AUTH', 'controller', 'Login initiated', {
+      email: request.email
+    })
+    
     try {
       const result = await this.authService.login(request);
 

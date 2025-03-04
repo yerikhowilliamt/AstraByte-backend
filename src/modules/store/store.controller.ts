@@ -207,8 +207,8 @@ export class StoreController {
         'controller',
         'Checking authorization initiated',
         {
-          user_id: userId
-        }
+          user_id: userId,
+        },
       );
 
       this.loggerService.debug(
