@@ -80,7 +80,7 @@ export class StoreService {
         id,
       });
 
-      const store = await this.checkExistingStore(id, user.id);
+      const store = await this.checkExistingStore({id, userId:user.id});
 
       this.loggerService.info('STORE', 'service', 'Store fetched successfully');
 
@@ -108,9 +108,9 @@ export class StoreService {
         request,
       );
 
-      let store = await this.checkExistingStore(id, user.id);
+      let store = await this.checkExistingStore({id, userId:user.id});
 
-      await this.checkStoreNameExists(store.id, updateRequest.name, user.id);
+      await this.checkStoreNameExists(store.id, updateRequest.name);
 
       store = await this.prismaService.store.update({
         where: { id: store.id, userId: user.id },
@@ -146,7 +146,7 @@ export class StoreService {
     });
 
     try {
-      const store = await this.checkExistingStore(id, user.id);
+      const store = await this.checkExistingStore({id, userId:user.id});
 
       await this.prismaService.store.delete({
         where: { id: store.id },
@@ -171,28 +171,53 @@ export class StoreService {
     }
   }
 
-  private async checkExistingStore(id: number, userId: number): Promise<Store> {
-    const store = await this.prismaService.store.findFirst({
-      where: { id, userId },
-    });
+  async checkExistingStore(params: { userId: number; id: number }): Promise<Store> {
 
-    if (!store) {
-      throw new NotFoundException(`Store not found`);
+    try {
+      if (!params.id && !params.userId) {
+        throw new BadRequestException('Please insert Store ID and User ID');
+      }
+
+      const store = await this.prismaService.store.findUnique({
+        where: { id: params.id, userId: params.userId },
+      });
+  
+      if (!store) {
+        throw new NotFoundException(`Store not found`);
+      }
+
+      this.loggerService.info(
+        'STORE',
+        'service',
+        'Store validated successfully',
+        {
+          id: store.id,
+          user_id: store.userId,
+        },
+      );
+  
+      return store;
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'STORE',
+        'Failed validating store with params: ',
+        {
+          id: params.id,
+          user_id: params.userId,
+        },
+      );
     }
-
-    return store;
   }
 
   private async checkStoreNameExists(
     userId: number,
     name: string,
-    excludeId?: number,
   ): Promise<void> {
-    const storeNameExists = await this.prismaService.store.findFirst({
+    const storeNameExists = await this.prismaService.store.findUnique({
       where: {
         userId,
         name,
-        NOT: { id: excludeId },
       },
     });
 

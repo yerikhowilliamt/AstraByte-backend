@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Banner, Store, User } from '@prisma/client';
 import { handleErrorService } from '../../common/handle-error.service';
 import { LoggerService } from '../../common/logger.service';
@@ -11,6 +15,7 @@ import { ImageService } from '../image/image.service';
 import WebResponse from '../../models/web.model';
 import { UpdateBannerRequest } from './dto/update-banner.dto';
 import { CloudinaryService } from '../../common/cloudinary.service';
+import { StoreService } from '../store/store.service';
 
 @Injectable()
 export class BannerService {
@@ -18,10 +23,11 @@ export class BannerService {
     private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
+    private storeService: StoreService,
     private cloudinaryService: CloudinaryService,
     private imageService: ImageService,
-    private handleErrorService: handleErrorService
-  ) { }
+    private handleErrorService: handleErrorService,
+  ) {}
 
   private toBannerResponse(banner: Banner): BannerResponse {
     return {
@@ -35,51 +41,55 @@ export class BannerService {
     };
   }
 
-  private async checkExistingStore(params: {
-    userId: number;
-    storeId: number;
-  }): Promise<Store> {
-    this.loggerService.warn('BANNER', 'service', 'Check existing store with params:', {
-      user_id: params.userId,
-      store_id: params.storeId
-    });
-
-    const store = await this.prismaService.store.findUnique({
-      where: { userId: params.userId, id: params.storeId },
-    });
-
-    if (!store) {
-      throw new NotFoundException('Store not found');
-    }
-    return store;
-  }
-
   private async checkExistingBanner(params: {
     id: number;
     storeId: number;
   }): Promise<Banner> {
-    this.loggerService.warn(
-      'BANNER', 'service', 'Check existing banner with params:', {
-      id: params.id,
-      store_id: params.storeId
-    }
+    this.loggerService.info(
+      'BANNER',
+      'service',
+      'Check existing banner with params:',
+      {
+        id: params.id,
+        store_id: params.storeId,
+      },
     );
 
-    if (!params.id) {
-      throw new BadRequestException('Banner ID is required.');
-    }
+    try {
+      if (!params.id && !params.storeId) {
+        this.loggerService.warn('BANNER', 'service', 'Checking for existing banner failed- Banner ID and Store ID is missing', {
+          id: params.id,
+          store_id: params.storeId
+        })
+        throw new BadRequestException('Please insert Store ID and User ID');
+      }
 
-    const banner = await this.prismaService.banner.findUnique({
-      where: { id: params.id },
-    });
+      const banner = await this.prismaService.banner.findUnique({
+        where: { id: params.id },
+      });
 
-    if (!banner || banner.storeId !== params.storeId) {
-      throw new NotFoundException(
-        'Banner not found or does not belong to the store.',
+      if (!banner) {
+        this.loggerService.warn('BANNER', 'service', 'Checking for existing banner failed - Banner not found', {
+          id: params.id,
+          store_id: params.storeId
+        })
+        throw new NotFoundException(
+          'Banner not found or does not belong to the store.',
+        );
+      }
+
+      return banner;
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'An unexpected error while checking existing banner',
+        {
+          id: params.id,
+          store_id: params.storeId,
+        },
       );
     }
-
-    return banner;
   }
 
   async create(
@@ -90,17 +100,20 @@ export class BannerService {
   ): Promise<BannerResponse> {
     this.loggerService.info('BANNER', 'service', 'Creating banner initiated', {
       user_id: user.id,
-      store_id: storeId
+      store_id: storeId,
     });
 
     try {
-      const store = await this.checkExistingStore({
+      const store = await this.storeService.checkExistingStore({
         userId: user.id,
-        storeId,
+        id: storeId,
       });
 
       if (!request.name) {
-        throw new BadRequestException('Name cannot be empty.')
+        this.loggerService.warn('BANNER', 'service', 'Checking for banner name failed - Banner name is missing', {
+          name: request.name,
+        })
+        throw new BadRequestException('Name cannot be empty.');
       }
 
       const createRequest: CreateBannerRequest =
@@ -114,21 +127,31 @@ export class BannerService {
           name: createRequest.name,
           publicId: uploadImage.publicId,
           imageUrl: uploadImage.imageUrl,
-        }
-      })
+        },
+      });
 
-      this.loggerService.info('BANNER', 'service', 'Banner created successfully', {
-        id: banner.id,
-        store_id: banner.storeId,
-        public_id: banner.publicId,
-      })
+      this.loggerService.info(
+        'BANNER',
+        'service',
+        'Banner created successfully',
+        {
+          id: banner.id,
+          store_id: banner.storeId,
+          public_id: banner.publicId,
+        },
+      );
 
       return this.toBannerResponse(banner);
     } catch (error) {
-      this.handleErrorService.service(error, 'BANNER', 'Failed to create new banner', {
-        user_id: user.id,
-        store_id: storeId
-      });
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'Failed to create new banner',
+        {
+          user_id: user.id,
+          store_id: storeId,
+        },
+      );
     }
   }
 
@@ -139,11 +162,14 @@ export class BannerService {
     page: number,
   ): Promise<WebResponse<BannerResponse[]>> {
     this.loggerService.info('BANNER', 'service', 'Fetching banners initiated', {
-      user_id: user.id, store_id: storeId, page, limit
+      user_id: user.id,
+      store_id: storeId,
+      page,
+      limit,
     });
 
     try {
-      const store = await this.checkExistingStore({ userId: user.id, storeId });
+      const store = await this.storeService.checkExistingStore({ userId: user.id, id: storeId });
 
       const skip = (page - 1) * limit;
 
@@ -151,64 +177,89 @@ export class BannerService {
         this.prismaService.banner.findMany({
           where: { storeId: store.id },
           skip: skip,
-          take: limit
+          take: limit,
         }),
         await this.prismaService.banner.count({
           where: { storeId: store.id },
-        })
-      ])
+        }),
+      ]);
 
       if (banners.length === 0) {
-        throw new NotFoundException('Banners not found')
+        this.loggerService.warn('BANNER', 'service', 'No banners found when checking existing banners', {
+          banner_length: banners.length,
+        })
+        throw new NotFoundException('Banners not found');
       }
 
       const totalPages = Math.ceil(total / limit);
 
-      this.loggerService.info('BANNER', 'service', 'Banners fetched successfully', {
-        user_id: user.id,
-        total_banners: banners.length,
-        total_pages: totalPages,
-      });
+      this.loggerService.info(
+        'BANNER',
+        'service',
+        'Banners fetched successfully',
+        {
+          user_id: user.id,
+          total_banners: banners.length,
+          total_pages: totalPages,
+        },
+      );
 
       return {
         data: banners.map(this.toBannerResponse),
         paging: {
           current_page: page,
           size: limit,
-          total_page: totalPages
-        }
-      }
+          total_page: totalPages,
+        },
+      };
     } catch (error) {
-      this.handleErrorService.service(error, 'BANNER', 'Failed to fetching banners', {
-        user_id: user.id,
-        store_id: storeId
-      })
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'Failed to fetching banners',
+        {
+          user_id: user.id,
+          store_id: storeId,
+        },
+      );
     }
   }
 
   async get(user: User, storeId: number, id: number): Promise<BannerResponse> {
     this.loggerService.info('BANNER', 'service', 'Fetching banner initiated', {
-      user_id: user.id, store_id: storeId
+      id,
+      user_id: user.id,
+      store_id: storeId,
     });
 
     try {
-      const store = await this.checkExistingStore({ userId: user.id, storeId });
+      const store = await this.storeService.checkExistingStore({ userId: user.id, id: storeId });
 
-      const banner = await this.checkExistingBanner({ id, storeId: store.id });
+      const banner = await this.checkExistingBanner({ id: id, storeId: store.id });
 
-      this.loggerService.info('BANNER', 'service', 'Banner fetched successfully', {
-        user_id: user.id,
-        store_id: banner.storeId,
-        public_id: banner.publicId,
-      });
+      this.loggerService.info(
+        'BANNER',
+        'service',
+        'Banner fetched successfully',
+        {
+          user_id: user.id,
+          store_id: banner.storeId,
+          public_id: banner.publicId,
+        },
+      );
 
       return this.toBannerResponse(banner);
     } catch (error) {
-      this.handleErrorService.service(error, 'BANNER', 'Failed to fetching banner', {
-        id,
-        user_id: user.id,
-        store_id: storeId
-      });
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'Failed to fetching banner',
+        {
+          id,
+          user_id: user.id,
+          store_id: storeId,
+        },
+      );
     }
   }
 
@@ -219,31 +270,35 @@ export class BannerService {
     request: UpdateBannerRequest,
     image?: Express.Multer.File,
   ): Promise<BannerResponse> {
-    this.loggerService.warn('BANNER', 'service', 'Updating banner initiated', {
-      user_id: user.id, store_id: storeId
+    this.loggerService.info('BANNER', 'service', 'Updating banner initiated', {
+      user_id: user.id,
+      store_id: storeId,
     });
 
     try {
-      const store = await this.checkExistingStore({
+      const store = await this.storeService.checkExistingStore({
         userId: user.id,
-        storeId,
+        id: storeId,
       });
 
       const updateRequest: UpdateBannerRequest =
         this.validationService.validate(BannerValidation.UPDATE, request);
 
-        let banner = await this.checkExistingBanner({
-          id,
-          storeId: store.id,
-        });
-      
+      let banner = await this.checkExistingBanner({
+        id,
+        storeId: store.id,
+      });
+
       if (image) {
         const uploadImage = await this.imageService.uploadImage(image);
 
         await this.prismaService.banner.update({
           where: { id: banner.id },
-          data: {imageUrl: uploadImage.imageUrl, publicId: uploadImage.publicId}
-        })
+          data: {
+            imageUrl: uploadImage.imageUrl,
+            publicId: uploadImage.publicId,
+          },
+        });
       }
 
       banner = await this.prismaService.banner.update({
@@ -253,19 +308,29 @@ export class BannerService {
         },
       });
 
-      this.loggerService.info('BANNER', 'service', 'Banner updated successfully', {
-        id: banner.id,
-        user_id: user.id,
-        store_id: storeId,
-      });
+      this.loggerService.info(
+        'BANNER',
+        'service',
+        'Banner updated successfully',
+        {
+          id: banner.id,
+          user_id: user.id,
+          store_id: storeId,
+        },
+      );
 
       return this.toBannerResponse(banner);
     } catch (error) {
-      this.handleErrorService.service(error, 'BANNER', 'Failed to update banner', {
-        id,
-        user_id: user.id,
-        store_id: storeId
-      });
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'Failed to update banner',
+        {
+          id,
+          user_id: user.id,
+          store_id: storeId,
+        },
+      );
     }
   }
 
@@ -275,11 +340,13 @@ export class BannerService {
     id: number,
   ): Promise<{ message: string; success: boolean }> {
     this.loggerService.info('BANNER', 'service', 'deleting banner initiated', {
-      user_id: user.id, store_id: storeId, id
+      user_id: user.id,
+      store_id: storeId,
+      id,
     });
 
     try {
-      const store = await this.checkExistingStore({ userId: user.id, storeId });
+      const store = await this.storeService.checkExistingStore({ userId: user.id, id: storeId });
       const banner = await this.checkExistingBanner({ id, storeId: store.id });
       const publicId = banner.publicId.toString();
 
@@ -287,21 +354,31 @@ export class BannerService {
         where: { id: banner.id },
       });
 
-      await this.cloudinaryService.deleteImage(publicId)
+      await this.cloudinaryService.deleteImage(publicId);
 
-      this.loggerService.info('BANNER', 'service', 'Banner deleted successfully', {
-        id: banner.id,
-        user_id: user.id,
-        store_id: store.id,
-      });
+      this.loggerService.info(
+        'BANNER',
+        'service',
+        'Banner deleted successfully',
+        {
+          id: banner.id,
+          user_id: user.id,
+          store_id: store.id,
+        },
+      );
 
       return { message: 'Banner successfully deleted', success: true };
     } catch (error) {
-      this.handleErrorService.service(error, 'BANNER', 'Failed to delete banner', {
-        id,
-        user_id: user.id,
-        store_id: storeId
-      });
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'Failed to delete banner',
+        {
+          id,
+          user_id: user.id,
+          store_id: storeId,
+        },
+      );
     }
   }
 }

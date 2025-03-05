@@ -50,7 +50,7 @@ export class UserService {
 
       return this.toUserResponse(currentUser);
     } catch (error) {
-      this.handleErrorService.service(error, 'USER', 'Error during fetching user data');
+      this.handleErrorService.service(error, 'USER', 'An unexpected error occurred during fetching user data');
     }
   }
 
@@ -95,7 +95,7 @@ export class UserService {
 
       return this.toUserResponse(updatedUser);
     } catch (error) {
-      this.handleErrorService.service(error, 'USER', 'Error updating user data', {
+      this.handleErrorService.service(error, 'USER', 'An unexpected error occurred during updating user data', {
         user_id: user.id
       });
     }
@@ -118,9 +118,47 @@ export class UserService {
         success: true,
       };
     } catch (error) {
-      this.handleErrorService.service(error, 'USER', 'Error during logout', {
+      this.handleErrorService.service(error, 'USER', 'An unexpected error occurred during logout', {
         user_id: user.id
       });
+    }
+  }
+
+  async checkExistingUser(email: string): Promise<User> {
+    this.loggerService.info(
+      'USER',
+      'service',
+      'Checking user existence initiated',
+      {email}
+    );
+
+    try {
+      const user = await this.prismaService.user.findUnique({
+        where: {email}
+      })
+
+      if (!user) {
+        this.loggerService.info('USER', 'service', 'Checking for existing user failed - User not found', {
+          email
+        })
+
+        throw new NotFoundException('User not found')
+      }
+
+      this.loggerService.info('USER', 'service', 'User existence verified', {
+        id: user.id,
+      });
+
+      return user
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'USER',
+        'An unexpected error occurred while checking existing user',
+        {
+          email
+        },
+      );
     }
   }
 

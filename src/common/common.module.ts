@@ -34,7 +34,7 @@ import { CloudinaryProvider } from '../config/cloudinary.config';
           format: winston.format.combine(
             winston.format.colorize(),
             winston.format.printf(({ level, message, timestamp, ...meta }) => {
-              return `[${timestamp}] ${level}: ${message} ${JSON.stringify(meta)}`;
+              return `[${timestamp}] [${level}] : ${message} ${JSON.stringify(meta)}`;
             }),
           ),
         }),

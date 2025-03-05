@@ -51,7 +51,7 @@ export class handleErrorService {
         response_status: 500,
       });
       throw new InternalServerErrorException(
-        'An unexpected error occurred. Please try again.',
+        `Something went wrong. Please try again.`,
       );
     }
   }

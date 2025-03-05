@@ -1,4 +1,10 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import { ZodError } from 'zod';
 
 @Catch()
@@ -25,15 +31,19 @@ export class ErrorFilter implements ExceptionFilter {
       return this.handleZodError(exception);
     }
 
-    return [{ message: 'Internal Server Error' }];
+    this.logger.error('Unexpected error:', exception);
+
+    return [{ message: 'Internal server error' }];
   }
 
-  private handleHttpException(exception: HttpException): { field?: string; message: string }[] {
+  private handleHttpException(
+    exception: HttpException,
+  ): { field?: string; message: string }[] {
     const responseBody = exception.getResponse();
     this.logger.warn('HttpException detected');
 
     if (typeof responseBody === 'object' && 'errors' in responseBody) {
-      return (responseBody.errors as any[]).map(err => ({
+      return (responseBody.errors as any[]).map((err) => ({
         field: err.path?.join('.') || 'unknown',
         message: err.message,
       }));
@@ -42,9 +52,11 @@ export class ErrorFilter implements ExceptionFilter {
     return [{ message: responseBody['message'] || 'Bad Request' }];
   }
 
-  private handleZodError(exception: ZodError): { field: string; message: string }[] {
+  private handleZodError(
+    exception: ZodError,
+  ): { field: string; message: string }[] {
     this.logger.warn('ZodValidationException detected');
-    return exception.errors.map(err => ({
+    return exception.errors.map((err) => ({
       field: err.path.join('.'),
       message: err.message,
     }));

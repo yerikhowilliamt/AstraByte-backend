@@ -60,7 +60,7 @@ model Account {
 model Contact {
   id                  Int         @id                @default(autoincrement())
   userId              Int                            @map("user_id")
-  phone               String      @db.VarChar(20)
+  phone               String      @db.VarChar(20)    @unique
 
   createdAt           DateTime    @default(now())    @map("created_at")
   updatedAt           DateTime    @updatedAt         @map("updated_at")
@@ -74,7 +74,7 @@ model Contact {
 model Address {
   id                  Int         @id                @default(autoincrement())
   userId              Int                            @map("user_id")
-  street              String      @db.VarChar(255)
+  street              String      @db.VarChar(255)   
   city                String      @db.VarChar(100)
   province            String      @db.VarChar(100)
   country             String      @db.VarChar(100)
@@ -93,7 +93,7 @@ model Address {
 model Store {
   id                  Int         @id                @default(autoincrement())
   userId              Int                            @map("user_id")
-  name                String
+  name                String      @db.VarChar(100)   @unique
 
   createdAt           DateTime    @default(now())    @map("created_at")
   updatedAt           DateTime    @updatedAt         @map("updated_at")
@@ -101,6 +101,7 @@ model Store {
   user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   banners             Banner[]
+  categories          Category[]
 
   @@index([userId])
   @@map("stores")
@@ -109,7 +110,7 @@ model Store {
 model Banner {
   id                  Int         @id                @default(autoincrement())
   storeId             Int                            @map("store_id")
-  publicId            String                            @map("public_id")
+  publicId            String                         @map("public_id")
   name                String
   imageUrl            String
 
@@ -121,4 +122,18 @@ model Banner {
   @@index([storeId])
   @@index([publicId])
   @@map("banners")
+}
+
+model Category {
+  id                  Int         @id                @default(autoincrement())
+  storeId             Int                            @map("store_id")
+  name                String      @db.VarChar(100)   @unique
+  
+  createdAt           DateTime    @default(now())    @map("created_at")
+  updatedAt           DateTime    @updatedAt         @map("updated_at")
+
+  store               Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  @@index([storeId])
+  @@map("categories")
 }

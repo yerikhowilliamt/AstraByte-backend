@@ -13,6 +13,7 @@ import WebResponse from '../../models/web.model';
 import { UpdateContactRequest } from './dto/update-contact.dto';
 import { LoggerService } from '../../common/logger.service';
 import { handleErrorService } from '../../common/handle-error.service';
+import { UserService } from '../user/user.service';
 
 @Injectable()
 export class ContactService {
@@ -20,6 +21,7 @@ export class ContactService {
     private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
+    private userService: UserService,
     private handleErrorService: handleErrorService
   ) {}
 
@@ -35,7 +37,7 @@ export class ContactService {
         ContactValidation.CREATE,
         request,
       );
-      await this.checkPhoneExists(user.id, createRequest.phone);
+      await this.checkSamePhoneExists({userId: user.id, phone: request.phone});
       const contact = await this.prismaService.contact.create({
         data: { userId: user.id, phone: createRequest.phone },
       });
@@ -61,7 +63,7 @@ export class ContactService {
       { user_id: user.id, page, limit },
     );
     try {
-      const currentUser = await this.checkExistingUser(user.id);
+      const currentUser = await this.userService.checkExistingUser(user.email);
       const skip = (page - 1) * limit;
       const [contacts, total] = await Promise.all([
         this.prismaService.contact.findMany({
@@ -129,7 +131,7 @@ export class ContactService {
         request,
       );
       let contact = await this.checkExistingContact(contactId, user.id);
-      await this.checkPhoneExists(user.id, updateRequest.phone, contact.id);
+      await this.checkSamePhoneExists({userId: user.id, phone: contact.phone});
       
       contact = await this.prismaService.contact.update({
         where: { id: contactId },
@@ -188,15 +190,6 @@ export class ContactService {
     };
   }
 
-  private async checkExistingUser(id: number): Promise<User> {
-    this.loggerService.info('CONTACT', 'service', 'Checking user existence', {
-      user_id: id,
-    });
-    const user = await this.prismaService.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException('User not found');
-    return user;
-  }
-
   private async checkExistingContact(
     id: number,
     userId: number,
@@ -214,20 +207,19 @@ export class ContactService {
     return contact;
   }
 
-  private async checkPhoneExists(
+  private async checkSamePhoneExists(params: {
     userId: number,
     phone: string,
-    excludeId?: number,
+  }
   ): Promise<void> {
-    this.loggerService.warn('CONTACT', 'service', 'Checking phone existence', {
-      user_id: userId,
+    this.loggerService.warn('CONTACT', 'service', 'Checking same phone number exists', {
+      user_id: params.userId,
     });
 
-    const existingContact = await this.prismaService.contact.findFirst({
+    const existingContact = await this.prismaService.contact.findUnique({
       where: {
-        userId,
-        phone,
-        NOT: { id: excludeId },
+        userId: params.userId,
+        phone: params.phone,
       },
     });
 

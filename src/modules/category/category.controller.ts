@@ -9,62 +9,54 @@ import {
   Post,
   Put,
   Query,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { LoggerService } from '../../common/logger.service';
-import { BannerService } from './banner.service';
-import { handleErrorService } from '../../common/handle-error.service';
-import { JwtAuthGuard } from '../auth/guards/jwt.guard';
-import { RolesGuard } from '../auth/guards/role.guard';
-import { Roles } from '../../common/auth/roles.decorator';
-import WebResponse, { response } from '../../models/web.model';
-import { BannerResponse } from '../../models/banner.model';
-import { User } from '@prisma/client';
-import { Auth } from '../../common/auth/auth.decorator';
-import { CreateBannerRequest } from './dto/create-banner.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { UpdateBannerRequest } from './dto/update-banner.dto';
+import { LoggerService } from 'src/common/logger.service';
 
-@Controller('stores/:storeId/banners')
-export class BannerController {
+import { handleErrorService } from 'src/common/handle-error.service';
+import { CategoryService } from './category.service';
+import { RolesGuard } from '../auth/guards/role.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { Auth } from 'src/common/auth/auth.decorator';
+import { User } from '@prisma/client';
+import { CreateCategoryRequest } from './dto/create-category.dto';
+import WebResponse, { response } from 'src/models/web.model';
+import { CategoryResponse } from 'src/models/category.model';
+import { Roles } from 'src/common/auth/roles.decorator';
+import { UpdateCategoryRequest } from './dto/update-category.dto';
+
+@Controller('stores/:storeId/categories')
+export class CategoryController {
   constructor(
     private loggerService: LoggerService,
-    private bannerService: BannerService,
+    private categoryService: CategoryService,
     private handleErrorService: handleErrorService,
   ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  @UseInterceptors(FileInterceptor('image'))
   async create(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Body() request: CreateBannerRequest,
-    @UploadedFile() image: Express.Multer.File,
-  ): Promise<WebResponse<BannerResponse>> {
+    @Body() request: CreateCategoryRequest,
+  ): Promise<WebResponse<CategoryResponse>> {
     this.loggerService.info(
-      'BANNER',
+      'CATEGORY',
       'controller',
-      'Creating new banner initiated',
+      'Creating new category initiated',
       {
         user_id: user.id,
+        store_id: storeId,
+        name: request.name,
       },
     );
-
     try {
-      const result = await this.bannerService.create(
-        user,
-        storeId,
-        request,
-        image,
-      );
+      const result = await this.categoryService.create(user, storeId, request);
       this.loggerService.info(
-        'BANNER',
+        'CATEGORY',
         'controller',
-        'Banner created successfully',
+        'Category created successfully',
         {
           id: result.id,
           user_id: user.id,
@@ -72,10 +64,9 @@ export class BannerController {
           response_status: 201,
         },
       );
-  
       return response(result, 201);
     } catch (error) {
-      this.handleErrorService.controller(error, 'BANNER');
+      this.handleErrorService.controller(error, 'CATEGORY');
     }
   }
 
@@ -87,28 +78,33 @@ export class BannerController {
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-  ): Promise<WebResponse<BannerResponse[]>> {
+  ): Promise<WebResponse<CategoryResponse[]>> {
     this.loggerService.info(
-      'BANNER',
+      'CATEGORY',
       'controller',
-      'Fetching banners initiated',
+      'Fetching categories initiated',
       {
         user_id: user.id,
+        store_id: storeId,
         limit: limit,
         page: page,
       },
     );
-
     try {
-      const result = await this.bannerService.list(user, storeId, limit, page);
-      const bannerIds = result.data.map((banner) => banner.id).join(',');
+      const result = await this.categoryService.list(
+        user,
+        storeId,
+        limit,
+        page,
+      );
+      const categoryIds = result.data.map((category) => category.id).join(',');
 
       this.loggerService.info(
-        'BANNER',
+        'CATEGORY',
         'controller',
-        'Banners fetched successfully',
+        'categories fetched successfully',
         {
-          ids: bannerIds,
+          ids: categoryIds,
           user_id: user.id,
           store_id: storeId,
           data: result.paging.size,
@@ -118,36 +114,35 @@ export class BannerController {
 
       return response(result.data, 200, result.paging);
     } catch (error) {
-      this.handleErrorService.controller(error, 'BANNER');
+      this.handleErrorService.controller(error, 'CATEGORY');
     }
   }
 
-  @Get(':bannerId')
+  @Get(':categoryId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async get(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Param('bannerId', ParseIntPipe) bannerId: number,
-  ): Promise<WebResponse<BannerResponse>> {
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+  ): Promise<WebResponse<CategoryResponse>> {
     this.loggerService.info(
-      'BANNER',
+      'CATEGORY',
       'controller',
-      'Fetching banner initiated',
+      'Fetching category initiated',
       {
-        id: bannerId,
+        id: categoryId,
         user_id: user.id,
-        store_id: storeId
+        store_id: storeId,
       },
     );
-
     try {
-      const result = await this.bannerService.get(user, storeId, bannerId);
+      const result = await this.categoryService.get(user, storeId, categoryId);
 
       this.loggerService.info(
-        'BANNER',
+        'CATEGORY',
         'controller',
-        'Banner fetched successfully',
+        'category fetched successfully',
         {
           id: result.id,
           user_id: user.id,
@@ -157,44 +152,42 @@ export class BannerController {
 
       return response(result, 200);
     } catch (error) {
-      this.handleErrorService.controller(error, 'BANNER');
+      this.handleErrorService.controller(error, 'CATEGORY');
     }
   }
 
-  @Put(':bannerId')
+  @Put(':categoryId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  @UseInterceptors(FileInterceptor('image'))
   async update(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Param('bannerId', ParseIntPipe) bannerId: number,
-    @Body() request: UpdateBannerRequest,
-    @UploadedFile() image?: Express.Multer.File,
-  ): Promise<WebResponse<BannerResponse>> {
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Body() request: UpdateCategoryRequest,
+  ): Promise<WebResponse<CategoryResponse>> {
     this.loggerService.info(
-      'BANNER',
+      'CATEGORY',
       'controller',
-      'Updating banner initiated',
+      'Updating category initiated',
       {
-        id: bannerId,
+        id: categoryId,
         user_id: user.id,
+        name: request.name,
       },
     );
 
     try {
-      const result = await this.bannerService.update(
+      const result = await this.categoryService.update(
         user,
         storeId,
-        bannerId,
+        categoryId,
         request,
-        image,
       );
 
       this.loggerService.info(
-        'BANNER',
+        'CATEGORY',
         'controller',
-        'Banner updated successfully',
+        'Category updated successfully',
         {
           id: result.id,
           user_id: user.id,
@@ -204,37 +197,39 @@ export class BannerController {
 
       return response(result, 200);
     } catch (error) {
-      this.handleErrorService.controller(error, 'BANNER');
+      this.handleErrorService.controller(error, 'CATEGORY');
     }
   }
 
-  @Delete(':bannerId')
+  @Delete(':categoryId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async delete(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Param('bannerId', ParseIntPipe) bannerId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
   ): Promise<WebResponse<{ message: string; success: boolean }>> {
     this.loggerService.info(
-      'BANNER',
+      'CATEGORY',
       'controller',
-      'Updating banner initiated',
+      'Updating category initiated',
       {
-        id: bannerId,
+        id: categoryId,
         user_id: user.id,
       },
     );
-
     try {
-      const result = await this.bannerService.delete(user, storeId, bannerId);
-
+      const result = await this.categoryService.delete(
+        user,
+        storeId,
+        categoryId,
+      );
       this.loggerService.info(
-        'BANNER',
+        'CATEGORY',
         'controller',
-        'Banner updated successfully',
+        'Category deleted successfully',
         {
-          id: bannerId,
+          id: categoryId,
           user_id: user.id,
           response_status: 200,
         },
@@ -248,7 +243,7 @@ export class BannerController {
         200,
       );
     } catch (error) {
-      this.handleErrorService.controller(error, 'BANNER');
+      this.handleErrorService.controller(error, 'CATEGORY');
     }
   }
 }

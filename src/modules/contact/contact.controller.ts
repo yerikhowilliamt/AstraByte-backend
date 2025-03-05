@@ -38,10 +38,6 @@ export class ContactController {
     @Param('userId', ParseIntPipe) userId: number,
     @Body() request: CreateContactRequest,
   ): Promise<WebResponse<ContactResponse>> {
-    this.loggerService.debug('CONTACT', 'controller', 'Creating new contact initiated', {
-      phone: request.phone
-    });
-
     this.loggerService.info('CONTACT', 'controller', 'Created new contact initiated', {
       user_id: userId,
     })

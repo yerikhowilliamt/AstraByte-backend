@@ -18,6 +18,11 @@ import { LoginAuthRequest } from './dto/login-auth.dto';
 import { Account, User } from '@prisma/client';
 import { ValidateAuthRequest } from './dto/validate-auth.dto';
 import { LoggerService } from '../../common/logger.service';
+import * as crypto from 'crypto';
+
+// const algorithm = 'aes-256-cbc';
+// const secretKey = crypto.randomBytes(32);
+// const iv = crypto.randomBytes(16);
 
 @Injectable()
 export class AuthService {
@@ -50,7 +55,8 @@ export class AuthService {
       });
 
       this.loggerService.info('AUTH', 'service', 'Created user succcess', {
-        user_id: user.id,
+        id: user.id,
+        name: user.email
       });
 
       return {
@@ -68,19 +74,21 @@ export class AuthService {
       } else if (error instanceof BadRequestException) {
         throw error;
       } else {
-        this.loggerService.error('AUTH', 'service', 'Error during registration', {
+        this.loggerService.error('AUTH', 'service', 'An unexpected error occurred during registration', {
           error: error.message,
         });
 
         throw new InternalServerErrorException(
-          'Registration failed. Please try again.',
+          'Something went wrong during registration. Please try again.',
         );
       }
     }
   }
 
   async login(request: LoginAuthRequest): Promise<UserResponse> {
-    this.loggerService.info('AUTH', 'service', 'User login attempt')
+    this.loggerService.info('AUTH', 'service', 'User login attempt', {
+      email: request.email
+    })
 
     try {
       const loginRequest: LoginAuthRequest = this.validationService.validate(
@@ -102,6 +110,8 @@ export class AuthService {
       const accessToken = this.generateAccessToken(user.id, user.email, user.role);
       const refreshToken = this.generateRefreshToken(user.id, user.email, user.role);
 
+      const encryptToken = this.encrypt(refreshToken);
+
       const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
       await this.prismaService.user.update({
@@ -118,7 +128,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         accessToken,
-        refreshToken,
+        refreshToken: encryptToken,
         image: user.image,
         role: user.role,
         createdAt: user.createdAt.toISOString(),
@@ -251,14 +261,14 @@ export class AuthService {
   }
 
   async generateNewAccessToken(refreshToken: string) {
-    this.loggerService.debug('AUTH', 'service', 'Generate new access token initiated', {
+    this.loggerService.info('AUTH', 'service', 'Generate new access token initiated', {
       refresh_token: refreshToken
     })
 
-    this.loggerService.info('AUTH', 'service', 'Generate new access token initiated')
-
     try {
-      const payload = this.jwtService.verify(refreshToken, {
+      const decryptToken = this.decrypt(refreshToken);
+
+      const payload = this.jwtService.verify(decryptToken, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
 
@@ -283,7 +293,7 @@ export class AuthService {
       const refreshTokenDB = user.refreshToken;
 
       const isRefreshTokenMatched = await bcrypt.compare(
-        refreshToken,
+        decryptToken,
         refreshTokenDB,
       );
 
@@ -403,7 +413,7 @@ export class AuthService {
   }
 
   private generateAccessToken(userId: number, email: string, role:string): string {
-    this.loggerService.info('AUTH', 'service', 'Successfully created access token. Details: ', {
+    this.loggerService.info('AUTH', 'service', 'Created access token', {
       user_id: userId,
     })
 
@@ -417,7 +427,7 @@ export class AuthService {
   }
 
   private generateRefreshToken(userId: number, email: string, role: string): string {
-    this.loggerService.info('AUTH', 'service', 'Successfully created refresh token. Details: ', {
+    this.loggerService.info('AUTH', 'service', 'Created refresh token', {
       user_id: userId,
     })
 
@@ -428,5 +438,36 @@ export class AuthService {
         expiresIn: '30d',
       },
     );
+  }
+
+  private encrypt(token: string): string {
+    const algorithm = this.configService.get('CRYPTO_ALGORITHM');
+    const secretKey = this.configService.get('CRYPTO_SECRET_KEY');
+    const iv = this.configService.get('INITIAL_VECTOR');
+
+    const cipher = crypto.createCipheriv(
+      algorithm,
+      Buffer.from(secretKey, 'hex'),
+      Buffer.from(iv, 'hex')
+    );
+    let encrypted = cipher.update(token, 'utf-8', 'hex');
+
+    encrypted += cipher.final('hex');
+    return `${iv}:${encrypted}`;
+  }
+
+  private decrypt(encryptedToken: string): string {
+    const algorithm = this.configService.get<string>('CRYPTO_ALGORITHM');
+    const secretKey = this.configService.get('CRYPTO_SECRET_KEY');
+
+    const [ivHex, encrypted] = encryptedToken.split(':');
+    const decipher = crypto.createDecipheriv(
+      algorithm,
+      Buffer.from(secretKey, 'hex'),
+      Buffer.from(ivHex, 'hex'));
+    let decrypted = decipher.update(encrypted, 'hex', 'utf-8');
+
+    decrypted += decipher.final('utf-8');
+    return decrypted;
   }
 }
