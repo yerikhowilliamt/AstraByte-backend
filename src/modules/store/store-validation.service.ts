@@ -17,24 +17,23 @@ export class StoreValidationService {
     private handleErrorService: handleErrorService,
   ) {}
 
-  async validateStore(params: { userId: number; id: number }): Promise<Store> {
+  async validateStore(id: number): Promise<Store> {
     this.loggerService.info(
       'STORE',
       'service',
-      'Validating Store ID with params: ',
+      'Validating Store ID: ',
       {
-        id: params.id,
-        user_id: params.userId,
+        id
       },
     );
 
     try {
-      if (!params.id && !params.userId) {
-        throw new BadRequestException('Please insert Store ID and User ID');
+      if (!id) {
+        throw new BadRequestException('Please insert Store ID');
       }
 
       const store = await this.prismaService.store.findUnique({
-        where: { id: params.id, userId: params.userId },
+        where: { id },
       });
 
       if (!store) {
@@ -58,8 +57,7 @@ export class StoreValidationService {
         'STORE',
         'Failed validating store with params: ',
         {
-          id: params.id,
-          user_id: params.userId,
+          id
         },
       );
     }

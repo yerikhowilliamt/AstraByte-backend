@@ -8,9 +8,10 @@ import { StoreModule } from './modules/store/store.module';
 import { BannerModule } from './modules/banner/banner.module';
 import { ImageModule } from './modules/image/image.module';
 import { CategoryModule } from './modules/category/category.module';
+import { ColorModule } from './modules/color/color.module';
 
 @Module({
-  imports: [CommonModule, AuthModule, UserModule, ContactModule, AddressModule, StoreModule, BannerModule, ImageModule, CategoryModule],
+  imports: [CommonModule, AuthModule, UserModule, ContactModule, AddressModule, StoreModule, BannerModule, ImageModule, CategoryModule, ColorModule],
   controllers: [],
   providers: [],
 })

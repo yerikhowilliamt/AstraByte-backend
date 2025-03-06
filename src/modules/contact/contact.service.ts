@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,7 +23,7 @@ export class ContactService {
     private prismaService: PrismaService,
     private validationService: ValidationService,
     private userService: UserService,
-    private handleErrorService: handleErrorService
+    private handleErrorService: handleErrorService,
   ) {}
 
   async create(
@@ -37,17 +38,27 @@ export class ContactService {
         ContactValidation.CREATE,
         request,
       );
-      await this.checkSamePhoneExists({userId: user.id, phone: request.phone});
+      await this.checkSamePhoneExists(createRequest.phone);
       const contact = await this.prismaService.contact.create({
         data: { userId: user.id, phone: createRequest.phone },
       });
-      this.loggerService.info('CONTACT', 'service', 'Contact created successfully', {
-        user_id: user.id,
-        contact_id: contact.id,
-      });
+      this.loggerService.info(
+        'CONTACT',
+        'service',
+        'Contact created successfully',
+        {
+          user_id: user.id,
+          contact_id: contact.id,
+        },
+      );
       return this.toContactResponse(contact);
     } catch (error) {
-      this.handleErrorService.service(error,'CONTACT', 'Failed to create contact', { user_id: user.id });
+      this.handleErrorService.service(
+        error,
+        'CONTACT',
+        'Failed to create contact',
+        { user_id: user.id },
+      );
     }
   }
 
@@ -74,19 +85,31 @@ export class ContactService {
         this.prismaService.contact.count({ where: { userId: currentUser.id } }),
       ]);
       if (contacts.length === 0)
-        throw new NotFoundException('No contacts found');
+        throw new NotFoundException(
+          'No contacts found. Please check and try again.',
+        );
       const totalPages = Math.ceil(total / limit);
-      this.loggerService.info('CONTACT', 'service', 'Contacts fetched successfully', {
-        user_id: user.id,
-        total_contacts: contacts.length,
-        total_pages: totalPages,
-      });
+      this.loggerService.info(
+        'CONTACT',
+        'service',
+        'Contacts fetched successfully',
+        {
+          user_id: user.id,
+          total_contacts: contacts.length,
+          total_pages: totalPages,
+        },
+      );
       return {
         data: contacts.map(this.toContactResponse),
-        paging: { current_page: page, size: limit, total_page: totalPages },
+        paging: { current_page: page, size: limit, total_pages: totalPages },
       };
     } catch (error) {
-      this.handleErrorService.service(error,'CONTACT', 'Failed to fetch contacts', { user_id: user.id });
+      this.handleErrorService.service(
+        error,
+        'CONTACT',
+        'Failed to fetch contacts',
+        { user_id: user.id },
+      );
     }
   }
 
@@ -98,19 +121,29 @@ export class ContactService {
       { user_id: user.id, contact_id: id },
     );
     try {
-      const contact = await this.checkExistingContact(id, user.id);
+      const contact = await this.checkExistingContact({ id, userId: user.id });
 
-      this.loggerService.info('CONTACT', 'service', 'Contact fetched successfully', {
-        user_id: user.id,
-        contact_id: id,
-      });
+      this.loggerService.info(
+        'CONTACT',
+        'service',
+        'Contact fetched successfully',
+        {
+          user_id: user.id,
+          contact_id: id,
+        },
+      );
 
       return this.toContactResponse(contact);
     } catch (error) {
-      this.handleErrorService.service(error,'CONTACT', 'Failed to fetch contact', {
-        user_id: user.id,
-        contact_id: id,
-      });
+      this.handleErrorService.service(
+        error,
+        'CONTACT',
+        'Failed to fetch contact',
+        {
+          user_id: user.id,
+          contact_id: id,
+        },
+      );
     }
   }
 
@@ -130,25 +163,38 @@ export class ContactService {
         ContactValidation.UPDATE,
         request,
       );
-      let contact = await this.checkExistingContact(contactId, user.id);
-      await this.checkSamePhoneExists({userId: user.id, phone: contact.phone});
-      
+      let contact = await this.checkExistingContact({
+        id: contactId,
+        userId: user.id,
+      });
+      await this.checkSamePhoneExists(contact.phone);
+
       contact = await this.prismaService.contact.update({
         where: { id: contactId },
         data: { phone: updateRequest.phone },
       });
 
-      this.loggerService.info('CONTACT', 'service', 'Contact updated successfully', {
-        user_id: user.id,
-        contact_id: contactId,
-      });
+      this.loggerService.info(
+        'CONTACT',
+        'service',
+        'Contact updated successfully',
+        {
+          user_id: user.id,
+          contact_id: contactId,
+        },
+      );
 
       return this.toContactResponse(contact);
     } catch (error) {
-      this.handleErrorService.service(error,'CONTACT', 'Failed to update contact', {
-        user_id: user.id,
-        contact_id: contactId,
-      });
+      this.handleErrorService.service(
+        error,
+        'CONTACT',
+        'Failed to update contact',
+        {
+          user_id: user.id,
+          contact_id: contactId,
+        },
+      );
     }
   }
 
@@ -163,20 +209,30 @@ export class ContactService {
       { user_id: user.id, contact_id: id },
     );
     try {
-      const contact = await this.checkExistingContact(id, user.id);
+      const contact = await this.checkExistingContact({ id, userId: user.id });
       await this.prismaService.contact.delete({ where: { id: contact.id } });
-      
-      this.loggerService.info('CONTACT', 'service', 'Contact deleted successfully', {
-        user_id: user.id,
-        contact_id: contact.id,
-      });
-      
+
+      this.loggerService.info(
+        'CONTACT',
+        'service',
+        'Contact deleted successfully',
+        {
+          user_id: user.id,
+          contact_id: contact.id,
+        },
+      );
+
       return { message: 'Contact successfully deleted', success: true };
     } catch (error) {
-      this.handleErrorService.service(error,'CONTACT', 'Failed to delete contact', {
-        user_id: user.id,
-        contact_id: id,
-      });
+      this.handleErrorService.service(
+        error,
+        'CONTACT',
+        'Failed to delete contact',
+        {
+          user_id: user.id,
+          contact_id: id,
+        },
+      );
     }
   }
 
@@ -190,41 +246,128 @@ export class ContactService {
     };
   }
 
-  private async checkExistingContact(
-    id: number,
-    userId: number,
-  ): Promise<Contact> {
+  private async checkExistingContact(params: {
+    id: number;
+    userId: number;
+  }): Promise<Contact> {
     this.loggerService.info(
       'CONTACT',
       'service',
       'Checking contact existence',
-      { user_id: userId, contact_id: id },
+      { user_id: params.userId, id: params.id },
     );
-    const contact = await this.prismaService.contact.findFirst({
-      where: { id, userId },
-    });
-    if (!contact) throw new NotFoundException('Contact not found');
-    return contact;
+
+    if (!params.id || !params.userId) {
+      this.loggerService.warn(
+        'CONTACT',
+        'service',
+        'Checking for existing contact failed - Contact ID or User ID is missing',
+        {
+          id: params.id,
+          user_id: params.userId
+        },
+      );
+      throw new BadRequestException('Please insert Contact ID and User ID');
+    }
+
+    try {
+      const contact = await this.prismaService.contact.findUnique({
+        where: { id: params.id },
+      });
+      if (!contact) {
+        this.loggerService.warn(
+          'CONTACT',
+          'service',
+          'Checking for existing contact failed - Contact not found',
+          {
+            id: params.id,
+            user_id: params.userId,
+          },
+        );
+        throw new NotFoundException(
+          'Contact not found. Please check and try again.',
+        );
+      }
+
+      if (contact.userId !== params.userId) {
+        this.loggerService.warn(
+          'CONTACT',
+          'service',
+          'Checking for existing contact failed - User ID not matched',
+          {
+            id: params.id,
+            user_id: params.userId,
+          },
+        );
+        throw new ForbiddenException(
+          'You do not have permission to access this contact',
+        );
+      }
+      return contact;
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'An unexpected error while checking existing contact',
+        {
+          id: params.id,
+          user_id: params.userId,
+        },
+      );
+    }
   }
 
-  private async checkSamePhoneExists(params: {
-    userId: number,
-    phone: string,
-  }
-  ): Promise<void> {
-    this.loggerService.warn('CONTACT', 'service', 'Checking same phone number exists', {
-      user_id: params.userId,
-    });
-
-    const existingContact = await this.prismaService.contact.findUnique({
-      where: {
-        userId: params.userId,
-        phone: params.phone,
+  private async checkSamePhoneExists(phone: string): Promise<void> {
+    this.loggerService.warn(
+      'CONTACT',
+      'service',
+      'Checking same phone number exists',
+      {
+        phone,
       },
-    });
+    );
 
-    if (existingContact) {
-      throw new BadRequestException('You have already added this phone number');
+    if (!phone) {
+      this.loggerService.warn(
+        'CONTACT',
+        'service',
+        'Checking for same phone number exists failed - Phone number is missing',
+        {
+          phone
+        },
+      );
+      throw new BadRequestException('Please insert phone number');
+    }
+
+    try {
+      const existingContact = await this.prismaService.contact.findUnique({
+        where: {
+          phone,
+        },
+      });
+  
+      if (existingContact) {
+        this.loggerService.warn(
+          'CONTACT',
+          'service',
+          'Checking same phone number exists failed - Phone number already exists',
+          {
+            phone,
+          },
+        );
+        throw new BadRequestException(
+          `Oops! This phone number ${existingContact.phone} is already in use. Try a different one.`,
+        );
+      }
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'BANNER',
+        'An unexpected error while checking existing same phone number',
+        {
+          phone
+        },
+      );
     }
   }
 }

@@ -1,62 +1,51 @@
-import {
-  Body,
-  Controller,
-  DefaultValuePipe,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Post,
-  Put,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
-import { LoggerService } from 'src/common/logger.service';
-
-import { handleErrorService } from 'src/common/handle-error.service';
-import { CategoryService } from './category.service';
-import { RolesGuard } from '../auth/guards/role.guard';
+import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { LoggerService } from '../../common/logger.service';
+import { ColorService } from '../color/color.service';
+import { handleErrorService } from '../../common/handle-error.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
-import { Auth } from 'src/common/auth/auth.decorator';
+import { RolesGuard } from '../auth/guards/role.guard';
+import { Roles } from '../../common/auth/roles.decorator';
+import { Auth } from '../../common/auth/auth.decorator';
+import { CreateColorRequest } from './dto/create-color.dto';
+import WebResponse, { response } from '../../models/web.model';
+import { ColorResponse } from '../../models/color.model';
 import { User } from '@prisma/client';
-import { CreateCategoryRequest } from './dto/create-category.dto';
-import WebResponse, { response } from 'src/models/web.model';
-import { CategoryResponse } from 'src/models/category.model';
-import { Roles } from 'src/common/auth/roles.decorator';
-import { UpdateCategoryRequest } from './dto/update-category.dto';
+import { UpdateColorRequest } from './dto/update-color.dto';
 
-@Controller('stores/:storeId/categories')
-export class CategoryController {
+@Controller('stores/:storeId/colors')
+export class ColorController {
   constructor(
     private loggerService: LoggerService,
-    private categoryService: CategoryService,
+    private colorService: ColorService,
     private handleErrorService: handleErrorService,
-  ) {}
-
+  ) { }
+  
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async create(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Body() request: CreateCategoryRequest,
-  ): Promise<WebResponse<CategoryResponse>> {
+    @Body() request: CreateColorRequest,
+  ): Promise<WebResponse<ColorResponse>> {
     this.loggerService.info(
-      'CATEGORY',
+      'COLOR',
       'controller',
-      'Creating new category initiated',
+      'Creating new color initiated',
       {
         user_id: user.id,
         store_id: storeId,
         name: request.name,
+        value: request.value
       },
     );
+
     try {
-      const result = await this.categoryService.create(user, storeId, request);
+      const result = await this.colorService.create(user, storeId, request);
       this.loggerService.info(
-        'CATEGORY',
+        'COLOR',
         'controller',
-        'Category created successfully',
+        'Color created successfully',
         {
           id: result.id,
           user_id: user.id,
@@ -66,7 +55,7 @@ export class CategoryController {
       );
       return response(result, 201);
     } catch (error) {
-      this.handleErrorService.controller(error, 'CATEGORY');
+      this.handleErrorService.controller(error, 'COLOR');
     }
   }
 
@@ -78,11 +67,11 @@ export class CategoryController {
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-  ): Promise<WebResponse<CategoryResponse[]>> {
+  ): Promise<WebResponse<ColorResponse[]>> {
     this.loggerService.info(
-      'CATEGORY',
+      'COLOR',
       'controller',
-      'Fetching categories initiated',
+      'Fetching colors initiated',
       {
         user_id: user.id,
         store_id: storeId,
@@ -91,20 +80,15 @@ export class CategoryController {
       },
     );
     try {
-      const result = await this.categoryService.list(
-        user,
-        storeId,
-        limit,
-        page,
-      );
-      const categoryIds = result.data.map((category) => category.id).join(',');
+      const result = await this.colorService.list(user, storeId, limit, page);
+      const colorIds = result.data.map((color) => color.id).join(',');
 
       this.loggerService.info(
-        'CATEGORY',
+        'COLOR',
         'controller',
-        'Categories fetched successfully',
+        'Colors fetched successfully',
         {
-          ids: categoryIds,
+          ids: colorIds,
           user_id: user.id,
           store_id: storeId,
           data: result.paging.size,
@@ -114,35 +98,35 @@ export class CategoryController {
 
       return response(result.data, 200, result.paging);
     } catch (error) {
-      this.handleErrorService.controller(error, 'CATEGORY');
+      this.handleErrorService.controller(error, 'COLOR');
     }
   }
 
-  @Get(':categoryId')
+  @Get(':colorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async get(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Param('categoryId', ParseIntPipe) categoryId: number,
-  ): Promise<WebResponse<CategoryResponse>> {
+    @Param('colorId', ParseIntPipe) colorId: number,
+  ): Promise<WebResponse<ColorResponse>> {
     this.loggerService.info(
-      'CATEGORY',
+      'COLOR',
       'controller',
-      'Fetching category initiated',
+      'Fetching color initiated',
       {
-        id: categoryId,
+        id: colorId,
         user_id: user.id,
         store_id: storeId,
       },
     );
     try {
-      const result = await this.categoryService.get(user, storeId, categoryId);
+      const result = await this.colorService.get(user, storeId, colorId);
 
       this.loggerService.info(
-        'CATEGORY',
+        'COLOR',
         'controller',
-        'Category fetched successfully',
+        'Color fetched successfully',
         {
           id: result.id,
           user_id: user.id,
@@ -152,42 +136,36 @@ export class CategoryController {
 
       return response(result, 200);
     } catch (error) {
-      this.handleErrorService.controller(error, 'CATEGORY');
+      this.handleErrorService.controller(error, 'COLOR');
     }
   }
 
-  @Put(':categoryId')
+  @Put(':colorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async update(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Param('categoryId', ParseIntPipe) categoryId: number,
-    @Body() request: UpdateCategoryRequest,
-  ): Promise<WebResponse<CategoryResponse>> {
+    @Param('colorId', ParseIntPipe) colorId: number,
+    @Body() request: UpdateColorRequest,
+  ): Promise<WebResponse<ColorResponse>> {
     this.loggerService.info(
-      'CATEGORY',
+      'COLOR',
       'controller',
-      'Updating category initiated',
+      'Updating color initiated',
       {
-        id: categoryId,
+        id: colorId,
         user_id: user.id,
         name: request.name,
       },
     );
-
     try {
-      const result = await this.categoryService.update(
-        user,
-        storeId,
-        categoryId,
-        request,
-      );
+      const result = await this.colorService.update(user, storeId, colorId, request);
 
       this.loggerService.info(
-        'CATEGORY',
+        'COLOR',
         'controller',
-        'Category updated successfully',
+        'Color updated successfully',
         {
           id: result.id,
           user_id: user.id,
@@ -197,39 +175,39 @@ export class CategoryController {
 
       return response(result, 200);
     } catch (error) {
-      this.handleErrorService.controller(error, 'CATEGORY');
+      this.handleErrorService.controller(error, 'COLOR');
     }
   }
 
-  @Delete(':categoryId')
+  @Delete(':colorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async delete(
     @Auth() user: User,
     @Param('storeId', ParseIntPipe) storeId: number,
-    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Param('colorId', ParseIntPipe) colorId: number,
   ): Promise<WebResponse<{ message: string; success: boolean }>> {
     this.loggerService.info(
-      'CATEGORY',
+      'COLOR',
       'controller',
-      'Deleting category initiated',
+      'Deleting color initiated',
       {
-        id: categoryId,
+        id: colorId,
         user_id: user.id,
       },
     );
     try {
-      const result = await this.categoryService.delete(
+      const result = await this.colorService.delete(
         user,
         storeId,
-        categoryId,
+        colorId,
       );
       this.loggerService.info(
-        'CATEGORY',
+        'COLOR',
         'controller',
-        'Category deleted successfully',
+        'Color deleted successfully',
         {
-          id: categoryId,
+          id: colorId,
           user_id: user.id,
           response_status: 200,
         },
@@ -243,7 +221,7 @@ export class CategoryController {
         200,
       );
     } catch (error) {
-      this.handleErrorService.controller(error, 'CATEGORY');
+      this.handleErrorService.controller(error, 'COLOR');
     }
   }
 }

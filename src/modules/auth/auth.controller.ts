@@ -99,12 +99,19 @@ export class AuthController {
         throw new UnauthorizedException('Google authentication failed');
       }
 
-      const currentUser = await this.authService.findUserById(user.id);
-      res.cookie('access_token', currentUser.accessToken, {
+      const result = await this.authService.findUserById(user.id);
+      res.cookie('access_token', result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         maxAge: 15 * 60 * 1000,
+      });
+
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
       res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');

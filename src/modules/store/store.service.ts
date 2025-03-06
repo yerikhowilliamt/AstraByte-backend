@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { LoggerService } from '../../common/logger.service';
 import { PrismaService } from '../../common/prisma.service';
 import { ValidationService } from '../../common/validation.service';
 import { Store, User } from '@prisma/client';
-import { StoreResponse } from 'src/models/store.model';
+import { StoreResponse } from '../../models/store.model';
 import { CreateStoreRequest } from './dto/create-store.dto';
 import { StoreValidation } from './store.validation';
 import { UpdateStoreRequest } from './dto/update-store.dto';
@@ -21,16 +22,6 @@ export class StoreService {
     private validationService: ValidationService,
     private handleErrorService: handleErrorService,
   ) {}
-
-  private toStoreResponse(store: Store): StoreResponse {
-    return {
-      id: store.id,
-      userId: store.userId,
-      name: store.name,
-      createdAt: store.createdAt.toISOString(),
-      updatedAt: store.updatedAt.toISOString(),
-    };
-  }
 
   async create(
     user: User,
@@ -46,7 +37,7 @@ export class StoreService {
         request,
       );
 
-      await this.checkStoreNameExists(user.id, createRequest.name);
+      await this.checkStoreNameExists(createRequest.name);
 
       const store = await this.prismaService.store.create({
         data: {
@@ -67,28 +58,43 @@ export class StoreService {
 
       return this.toStoreResponse(store);
     } catch (error) {
-      this.handleErrorService.service(error, 'STORE', 'Error creating store', {
-        user_id: user.id,
-      });
+      this.handleErrorService.service(
+        error,
+        'STORE',
+        'An unexpected error occurred during creating new store',
+        {
+          user_id: user.id,
+        },
+      );
     }
   }
 
   async get(user: User, id: number): Promise<StoreResponse> {
+    this.loggerService.info('STORE', 'service', 'Fetching store initiated', {
+      id,
+      user_id: user.id,
+    });
+
     try {
       this.loggerService.info('STORE', 'service', 'Fetching store initiated', {
         user_id: user.id,
         id,
       });
 
-      const store = await this.checkExistingStore({id, userId:user.id});
+      const store = await this.checkExistingStore({ id, userId: user.id });
 
       this.loggerService.info('STORE', 'service', 'Store fetched successfully');
 
       return this.toStoreResponse(store);
     } catch (error) {
-      this.handleErrorService.service(error, 'STORE', 'Error fetching store', {
-        user_id: user.id,
-      });
+      this.handleErrorService.service(
+        error,
+        'STORE',
+        'An unexpected error occurred during fetching store',
+        {
+          user_id: user.id,
+        },
+      );
     }
   }
 
@@ -108,12 +114,12 @@ export class StoreService {
         request,
       );
 
-      let store = await this.checkExistingStore({id, userId:user.id});
+      let store = await this.checkExistingStore({ id, userId: user.id });
 
-      await this.checkStoreNameExists(store.id, updateRequest.name);
+      await this.checkStoreNameExists(updateRequest.name);
 
       store = await this.prismaService.store.update({
-        where: { id: store.id, userId: user.id },
+        where: { id: store.id },
         data: { name: updateRequest.name },
       });
 
@@ -129,10 +135,15 @@ export class StoreService {
 
       return this.toStoreResponse(store);
     } catch (error) {
-      this.handleErrorService.service(error, 'STORE', 'Error updating store', {
-        user_id: user.id,
-        id,
-      });
+      this.handleErrorService.service(
+        error,
+        'STORE',
+        'An unexpected error occurred during updating store',
+        {
+          user_id: user.id,
+          id,
+        },
+      );
     }
   }
 
@@ -146,7 +157,7 @@ export class StoreService {
     });
 
     try {
-      const store = await this.checkExistingStore({id, userId:user.id});
+      const store = await this.checkExistingStore({ id, userId: user.id });
 
       await this.prismaService.store.delete({
         where: { id: store.id },
@@ -164,44 +175,106 @@ export class StoreService {
 
       return { message: 'Store successfully deleted', success: true };
     } catch (error) {
-      this.handleErrorService.service(error, 'STORE', 'Error deleting store', {
-        user_id: user.id,
-        id,
-      });
+      this.handleErrorService.service(
+        error,
+        'STORE',
+        'An unexpected error occurred during deleting store',
+        {
+          user_id: user.id,
+          id,
+        },
+      );
     }
   }
 
-  async checkExistingStore(params: { userId: number; id: number }): Promise<Store> {
+  private toStoreResponse(store: Store): StoreResponse {
+    return {
+      id: store.id,
+      userId: store.userId,
+      name: store.name,
+      createdAt: store.createdAt.toISOString(),
+      updatedAt: store.updatedAt.toISOString(),
+    };
+  }
+
+  async checkExistingStore(params: {
+    id: number;
+    userId: number;
+  }): Promise<Store> {
+    this.loggerService.info(
+      'STORE',
+      'service',
+      'Check existing store with params:',
+      {
+        id: params.id,
+        user_id: params.userId,
+      },
+    );
+
+    if (!params.id || !params.userId) {
+      this.loggerService.warn(
+        'STORE',
+        'service',
+        'Checking for existing store failed - Store ID and User ID is missing',
+        {
+          id: params.id,
+          user_id: params.userId,
+        },
+      );
+      throw new BadRequestException('Please insert Store ID and User ID');
+    }
 
     try {
-      if (!params.id && !params.userId) {
-        throw new BadRequestException('Please insert Store ID and User ID');
+      const store = await this.prismaService.store.findUnique({
+        where: { id: params.id },
+      });
+
+      if (!store) {
+        this.loggerService.warn(
+          'STORE',
+          'service',
+          'Checking for existing store failed - Store not found',
+          {
+            id: params.id,
+            user_id: params.userId,
+          },
+        );
+        throw new NotFoundException(
+          `Store not found. Please check and try again.`,
+        );
       }
 
-      const store = await this.prismaService.store.findUnique({
-        where: { id: params.id, userId: params.userId },
-      });
-  
-      if (!store) {
-        throw new NotFoundException(`Store not found`);
+      if (store.userId !== params.userId) {
+        this.loggerService.warn(
+          'STORE',
+          'service',
+          'Checking for existing store failed - User ID not matched',
+          {
+            id: params.id,
+            user_id: params.userId,
+          },
+        );
+        throw new ForbiddenException(
+          'You do not have permission to access this store',
+        );
       }
 
       this.loggerService.info(
         'STORE',
         'service',
-        'Store validated successfully',
+        'Checking store successfully',
         {
           id: store.id,
           user_id: store.userId,
         },
       );
-  
+
       return store;
     } catch (error) {
       this.handleErrorService.service(
         error,
         'STORE',
-        'Failed validating store with params: ',
+        'An unexpected error occurred while checking existing store',
         {
           id: params.id,
           user_id: params.userId,
@@ -210,19 +283,57 @@ export class StoreService {
     }
   }
 
-  private async checkStoreNameExists(
-    userId: number,
-    name: string,
-  ): Promise<void> {
-    const storeNameExists = await this.prismaService.store.findUnique({
-      where: {
-        userId,
+  private async checkStoreNameExists(name: string): Promise<void> {
+    this.loggerService.info(
+      'STORE',
+      'service',
+      'Checking store name initiated',
+      {
         name,
       },
-    });
+    );
 
-    if (storeNameExists) {
-      throw new BadRequestException('You have already added this store');
+    if (!name) {
+      this.loggerService.warn(
+        'STORE',
+        'service',
+        'Checking for existing store name failed - Store name is missing',
+        {
+          name
+        },
+      );
+      throw new BadRequestException('Please insert Store name');
+    }
+
+    try {
+      const storeNameExists = await this.prismaService.store.findUnique({
+        where: {
+          name,
+        },
+      });
+
+      if (storeNameExists) {
+        this.loggerService.warn(
+          'STORE',
+          'service',
+          'Checking for existing store name failed - Store name already exists',
+          {
+            name,
+          },
+        );
+        throw new BadRequestException(
+          `Oops! ${storeNameExists.name} is already in use. Try a different one.`,
+        );
+      }
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'STORE',
+        'An unexpected error occurred while checking existing store name',
+        {
+          name,
+        },
+      );
     }
   }
 }

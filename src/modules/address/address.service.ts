@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,23 +23,8 @@ export class AddressService {
     private prismaService: PrismaService,
     private validationService: ValidationService,
     private userService: UserService,
-    private handleErrorService: handleErrorService
+    private handleErrorService: handleErrorService,
   ) {}
-
-  private toAddressResponse(address: Address) {
-    return {
-      id: address.id,
-      userId: address.userId,
-      street: address.street,
-      city: address.city,
-      province: address.province,
-      country: address.country,
-      postalCode: address.postalCode,
-      isPrimary: address.isPrimary,
-      createdAt: address.createdAt.toISOString(),
-      updatedAt: address.updatedAt.toISOString(),
-    };
-  }
 
   async create(
     user: User,
@@ -85,12 +71,17 @@ export class AddressService {
       );
 
       return this.toAddressResponse(
-        await this.setPrimaryAddress(address, user.id),
+        await this.setPrimaryAddress({address, userId: user.id}),
       );
     } catch (error) {
-      this.handleErrorService.service(error, 'ADDRESS', 'An unexpected error occurred while creating address', {
-        user_id: user.id,
-      });
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred while creating address',
+        {
+          user_id: user.id,
+        },
+      );
     }
   }
 
@@ -144,15 +135,20 @@ export class AddressService {
         paging: {
           size: limit,
           current_page: page,
-          total_page: totalPages,
+          total_pages: totalPages,
         },
       };
     } catch (error) {
-      this.handleErrorService.service(error, 'ADDRESS', 'An unexpected error occurred while fetching addresses', {
-        user_id: user.id,
-        limit,
-        page
-      });
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred while fetching addresses',
+        {
+          user_id: user.id,
+          limit,
+          page,
+        },
+      );
     }
   }
 
@@ -170,15 +166,20 @@ export class AddressService {
       const primaryAddress = await this.prismaService.address.findFirst({
         where: {
           userId: user.id,
-          isPrimary: true
+          isPrimary: true,
         },
       });
 
       if (!primaryAddress) {
-        this.loggerService.warn('ADDRESS', 'service', 'Checking for existing primary address failed - Primary adress not found', {
-          id: primaryAddress.id,
-          user_id: user.id
-        })
+        this.loggerService.warn(
+          'ADDRESS',
+          'service',
+          'Checking for existing primary address failed - Primary adress not found',
+          {
+            id: primaryAddress.id,
+            user_id: user.id,
+          },
+        );
         throw new NotFoundException('Primary address not found');
       }
 
@@ -194,9 +195,14 @@ export class AddressService {
 
       return this.toAddressResponse(primaryAddress);
     } catch (error) {
-      this.handleErrorService.service(error, 'ADDRESS', 'An unexpected error occurred while fetching primary address', {
-        user_id: user.id
-      });
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred while fetching primary address',
+        {
+          user_id: user.id,
+        },
+      );
     }
   }
 
@@ -219,24 +225,33 @@ export class AddressService {
       const updateRequest: UpdateAddressRequest =
         this.validationService.validate(AddressValidation.UPDATE, request);
 
-      let address = await this.checkExistingAddress(addressId, user.id);
+      let address = await this.checkExistingAddress({
+        id: addressId,
+        userId: user.id,
+      });
 
       if (updateRequest.street) {
-        this.loggerService.warn('ADDRESS', 'service', 'Checking for street update request', {
-          id: address.id,
-          user_id: user.id,
-          street: updateRequest.street
-        })
-
-        await this.checkSameAddressExists(
-          user.id,
-          { street: updateRequest.street },
-          addressId,
+        this.loggerService.warn(
+          'ADDRESS',
+          'service',
+          'Checking for street update request',
+          {
+            id: address.id,
+            user_id: user.id,
+            street: updateRequest.street,
+          },
         );
+
+        await this.checkSameAddressExists(user.id, {
+          street: updateRequest.street,
+        });
       }
 
       if (updateRequest.isPrimary === true) {
-        await this.ensureSinglePrimaryAddress(user.id, addressId);
+        await this.ensureSinglePrimaryAddress({
+          userId: user.id,
+          excludeId: addressId,
+        });
       }
 
       address = await this.prismaService.address.update({
@@ -255,13 +270,18 @@ export class AddressService {
       );
 
       return this.toAddressResponse(
-        await this.setPrimaryAddress(address, user.id),
+        await this.setPrimaryAddress({address, userId: user.id}),
       );
     } catch (error) {
-      this.handleErrorService.service(error, 'ADDRESS', 'An unexpected error occurred during updating contact', {
-        user_id: user.id,
-        address_id: addressId,
-      });
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred during updating contact',
+        {
+          user_id: user.id,
+          address_id: addressId,
+        },
+      );
     }
   }
 
@@ -269,10 +289,15 @@ export class AddressService {
     user: User,
     id: number,
   ): Promise<{ message: string; success: boolean }> {
-    this.loggerService.info('ADDRESS', 'service', 'Deleting address initiated', {id, user_id: user.id});
+    this.loggerService.info(
+      'ADDRESS',
+      'service',
+      'Deleting address initiated',
+      { id, user_id: user.id },
+    );
 
     try {
-      const address = await this.checkExistingAddress(id, user.id);
+      const address = await this.checkExistingAddress({ id, userId: user.id });
 
       await this.prismaService.address.delete({
         where: { id: address.id },
@@ -290,38 +315,78 @@ export class AddressService {
 
       return { message: 'Address successfully deleted', success: true };
     } catch (error) {
-      this.handleErrorService.service(error, 'ADDRESS', 'An unexpected error occurred during deleting address', {
-        user_id: user.id,
-        address_id: id,
-      });
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred during deleting address',
+        {
+          user_id: user.id,
+          address_id: id,
+        },
+      );
     }
   }
-  private async checkExistingAddress(
-    id: number,
-    userId: number,
-  ): Promise<Address> {
+
+  private toAddressResponse(address: Address) {
+    return {
+      id: address.id,
+      userId: address.userId,
+      street: address.street,
+      city: address.city,
+      province: address.province,
+      country: address.country,
+      postalCode: address.postalCode,
+      isPrimary: address.isPrimary,
+      createdAt: address.createdAt.toISOString(),
+      updatedAt: address.updatedAt.toISOString(),
+    };
+  }
+  private async checkExistingAddress(params: {
+    id: number;
+    userId: number;
+  }): Promise<Address> {
     this.loggerService.info(
       'ADDRESS',
       'service',
       'Checking address existence initiated',
       {
-        user_id: userId,
-        id: id
-      }
+        id: params.id,
+        user_id: params.userId,
+      },
     );
 
     try {
       const address = await this.prismaService.address.findUnique({
-        where: { id, userId },
+        where: { id: params.id },
       });
-  
+
       if (!address) {
-        this.loggerService.warn('ADDRESS', 'service', 'Checking for existing address failed - Address not found', {
-          id: address.id
-        })
+        this.loggerService.warn(
+          'ADDRESS',
+          'service',
+          'Checking for existing address failed - Address not found',
+          {
+            id: address.id,
+          },
+        );
         throw new NotFoundException('Address not found');
       }
-  
+
+      if (address.userId !== params.userId) {
+        this.loggerService.warn(
+          'ADDRESS',
+          'service',
+          'Checking for existing address failed - User ID not matched',
+          {
+            id: params.id,
+            user_id: params.userId,
+          },
+        );
+        throw new ForbiddenException(
+          'You do not have permission to access this address',
+        );
+      }
+
       this.loggerService.info(
         'ADDRESS',
         'service',
@@ -331,7 +396,7 @@ export class AddressService {
           address_id: address.id,
         },
       );
-  
+
       return address;
     } catch (error) {
       this.handleErrorService.service(
@@ -339,8 +404,8 @@ export class AddressService {
         'ADDRESS',
         'An unexpected error occurred while checking existing address',
         {
-          id,
-          user_id: userId
+          id: params.id,
+          user_id: params.userId,
         },
       );
     }
@@ -349,109 +414,212 @@ export class AddressService {
   private async checkSameAddressExists(
     userId: number,
     params: Partial<Address>,
-    excludeId?: number,
   ): Promise<void> {
     this.loggerService.info(
       'ADDRESS',
       'service',
       'Checking same address existence initiated',
+      {
+        userId,
+        street: params.street,
+        city: params.city,
+        province: params.province,
+        country: params.country,
+        postalCode: params.postalCode,
+      },
     );
 
-    const existingAddress = await this.prismaService.address.findFirst({
-      where: {
-        ...params,
-        userId,
-        NOT: { id: excludeId },
-      },
-    });
+    if (
+      !params.street ||
+      !params.city ||
+      !params.province ||
+      !params.country ||
+      !params.postalCode
+    ) {
+      this.loggerService.warn(
+        'ADDRESS',
+        'service',
+        'Checking failed - Missing required fields',
+        {
+          street: params.street,
+          city: params.city,
+          province: params.province,
+          country: params.country,
+          postalCode: params.postalCode,
+        },
+      );
+      throw new BadRequestException('All address fields must be provided.');
+    }
 
-    if (existingAddress) {
-      this.loggerService.warn('ADDRESS', 'service', 'Checking for existing same address failed - Address already exists', {
-        id: existingAddress.id,
-      })
-      throw new BadRequestException('This Address already exists');
+    try {
+      const existingAddress = await this.prismaService.address.findUnique({
+        where: {
+          userId_street_city_province_country_postalCode: {
+            userId,
+            street: params.street,
+            city: params.city,
+            province: params.province,
+            country: params.country,
+            postalCode: params.postalCode,
+          },
+        },
+      });
+
+      if (existingAddress) {
+        this.loggerService.warn(
+          'ADDRESS',
+          'service',
+          'Checking for existing same address failed - Address already exists',
+          {
+            id: existingAddress.id,
+          },
+        );
+        throw new BadRequestException('This address already exists.');
+      }
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred while checking same address exists',
+        {
+          user_id: userId,
+        },
+      );
     }
   }
 
-  private async ensureSinglePrimaryAddress(userId: number, excludeId?: number): Promise<void> {
-    this.loggerService.warn(
-      'ADDRESS',
-      'service',
-      `Ensuring only one primary address for userId: ${userId}, excluding id: ${excludeId ?? 'none'}`
-    );
-  
-    await this.prismaService.address.updateMany({
-      where: {
-        userId,
-        isPrimary: true,
-        ...(excludeId ? { id: { not: excludeId } } : {}),
-      },
-      data: { isPrimary: false },
-    });
-  
+  private async ensureSinglePrimaryAddress(params: {
+    userId: number;
+    excludeId?: number;
+  }): Promise<void> {
     this.loggerService.info(
       'ADDRESS',
       'service',
-      `Primary address update completed`, {
-        user_id: userId
-      }
+      'Ensuring only one primary address initiated',
+      {
+        user_id: params.userId,
+        exclude_id: params.excludeId || null,
+      },
     );
-  }  
+
+    if (!params.userId) {
+      this.loggerService.warn(
+        'ADDRESS',
+        'service',
+        'Ensuring a single primary address failed - User ID is missing',
+        {
+          user_id: params.userId,
+          exclude_id: params.excludeId || null
+        },
+      );
+      throw new BadRequestException('Please insert User ID');
+    }
+
+    try {
+      await this.prismaService.address.updateMany({
+        where: {
+          userId: params.userId,
+          isPrimary: true,
+          ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
+        },
+        data: { isPrimary: false },
+      });
+
+      this.loggerService.info(
+        'ADDRESS',
+        'service',
+        `Primary address update completed`,
+        {
+          user_id: params.userId,
+          exclude_id: params.excludeId || null,
+        },
+      );
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'ADDRESS',
+        'An unexpected error occurred while ensuring a single primary address',
+        {
+          user_id: params.userId,
+          exclude_id: params.excludeId || null,
+        },
+      );
+    }
+  }
 
   private async setPrimaryAddress(
-    address: Address,
-    userId: number,
+    params: {
+      address: Address,
+      userId: number,
+    }
   ): Promise<Address> {
-    this.loggerService.warn(
+    this.loggerService.info(
       'ADDRESS',
       'service',
       'Set user address as primary initiated',
+      {
+        id: params.address.id,
+        user_id: params.userId
+      }
     );
+
+    if (!params.address || !params.userId) {
+      this.loggerService.warn(
+        'ADDRESS',
+        'service',
+        'Checking for set primary address failed - Address ID or User ID is missing',
+        {
+          id: params.address.id,
+          user_id: params.userId,
+        },
+      );
+      throw new BadRequestException('Please insert Address and User ID');
+    }
 
     try {
       const currentPrimaryAddress = await this.prismaService.address.findFirst({
-        where: { userId, isPrimary: true },
+        where: { userId: params.userId, isPrimary: true },
       });
-  
-      if (!currentPrimaryAddress && address.isPrimary) {
+
+      if (!currentPrimaryAddress && params.address.isPrimary) {
         return this.prismaService.address.update({
-          where: { id: address.id },
+          where: { id: params.address.id },
           data: { isPrimary: true },
         });
       }
-  
-      if (address.isPrimary && currentPrimaryAddress?.id !== address.id) {
+
+      if (params.address.isPrimary && currentPrimaryAddress?.id !== params.address.id) {
         await this.prismaService.address.update({
           where: { id: currentPrimaryAddress.id },
           data: { isPrimary: false },
         });
-  
+
         this.loggerService.info(
           'ADDRESS',
           'service',
           'Primary address updated successfully',
           {
-            user_id: address.userId,
-            address_id: address.id,
-            address_primary: address.isPrimary,
+            user_id: params.address.userId,
+            address_id: params.address.id,
+            address_primary: params.address.isPrimary,
           },
         );
-  
+
         return this.prismaService.address.update({
-          where: { id: address.id },
+          where: { id: params.address.id },
           data: { isPrimary: true },
         });
       }
-  
-      return address;
+
+      return params.address;
     } catch (error) {
       this.handleErrorService.service(
         error,
         'ADDRESS',
         'An unexpected error occurred while set user address as primary',
         {
-          id: address.id,
-          user_id: userId
+          id: params.address.id,
+          user_id: params.userId,
         },
       );
     }

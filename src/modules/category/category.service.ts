@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -48,22 +49,17 @@ export class CategoryService {
       {
         user_id: user.id,
         store_id: storeId,
+        name: request.name
       },
     );
 
     try {
-      const store = await this.storeService.checkExistingStore({
-        userId: user.id,
-        id: storeId,
-      });
+      const store = await this.storeService.checkExistingStore({id: storeId, userId: user.id});
 
       const createRequest: CreateCategoryRequest =
         this.validationService.validate(CategoryValidation.CREATE, request);
 
-      await this.checkCategoryNameExists({
-        storeId: store.id,
-        name: createRequest.name,
-      });
+      await this.checkCategoryNameExists(createRequest.name);
 
       const category = await this.prismaService.category.create({
         data: {
@@ -77,8 +73,10 @@ export class CategoryService {
         'service',
         'Category successfully created',
         {
+          id: category.id,
           user_id: user.id,
-          category_id: category.id,
+          store_id: category.storeId,
+          name: category.name
         },
       );
 
@@ -114,10 +112,7 @@ export class CategoryService {
     );
 
     try {
-      const store = await this.storeService.checkExistingStore({
-        userId: user.id,
-        id: storeId,
-      });
+      const store = await this.storeService.checkExistingStore({id: storeId, userId: user.id});
 
       const skip = (page - 1) * limit;
 
@@ -155,7 +150,7 @@ export class CategoryService {
         paging: {
           current_page: page,
           size: limit,
-          total_page: totalPages,
+          total_pages: totalPages,
         },
       };
     } catch (error) {
@@ -183,15 +178,9 @@ export class CategoryService {
       },
     );
     try {
-      const store = await this.storeService.checkExistingStore({
-        userId: user.id,
-        id: storeId,
-      });
+      const store = await this.storeService.checkExistingStore({id: storeId, userId: user.id});
 
-      const category = await this.checkExistingCategory({
-        id,
-        storeId: store.id,
-      });
+      const category = await this.checkExistingCategory({id, storeId: store.id});
 
       this.loggerService.info(
         'CATEGORY',
@@ -232,18 +221,12 @@ export class CategoryService {
     );
 
     try {
-      const store = await this.storeService.checkExistingStore({
-        userId: user.id,
-        id: storeId,
-      });
+      const store = await this.storeService.checkExistingStore({id: storeId, userId: user.id});
 
       const updateRequest: UpdateCategoryRequest =
         this.validationService.validate(CategoryValidation.UPDATE, request);
 
-      let category = await this.checkExistingCategory({
-        id,
-        storeId: store.id,
-      });
+      let category = await this.checkExistingCategory({id, storeId: store.id});
 
       category = await this.prismaService.category.update({
         where: { id: category.id },
@@ -274,15 +257,9 @@ export class CategoryService {
     );
 
     try {
-      const store = await this.storeService.checkExistingStore({
-        userId: user.id,
-        id: storeId,
-      });
+      const store = await this.storeService.checkExistingStore({id: storeId, userId: user.id});
 
-      const category = await this.checkExistingCategory({
-        id,
-        storeId: store.id,
-      });
+      const category = await this.checkExistingCategory({id, storeId: store.id});
 
       await this.prismaService.category.delete({
         where: { id: category.id },
@@ -315,35 +292,35 @@ export class CategoryService {
   }
 
   private async checkExistingCategory(params: {
-    storeId: number;
-    id: number;
+    id: number,
+    storeId: number
   }): Promise<Category> {
     this.loggerService.info(
       'CATEGORY',
       'service',
-      'Checking existing category with params: ',
+      'Checking existing category with ID: ',
       {
         id: params.id,
-        store_id: params.storeId,
+        store_id: params.storeId
       },
     );
 
+    if (!params.id || params.storeId) {
+      this.loggerService.warn(
+        'CATEGORY',
+        'service',
+        'Checking for existing category failed - Category ID or Store ID is missing',
+        {
+          id: params.id,
+          store_id: params.storeId
+        },
+      );
+      throw new BadRequestException('Please insert Category ID and Store ID');
+    }
+    
     try {
-      if (!params.id && !params.storeId) {
-        this.loggerService.warn(
-          'CATEGORY',
-          'service',
-          'Checking for existing category failed- Category ID and Store ID is missing',
-          {
-            id: params.id,
-            store_id: params.storeId,
-          },
-        );
-        throw new BadRequestException('Please insert Category ID and Store ID');
-      }
-
       const category = await this.prismaService.category.findUnique({
-        where: { id: params.id, storeId: params.storeId },
+        where: { id: params.id },
       });
 
       if (!category) {
@@ -352,11 +329,22 @@ export class CategoryService {
           'service',
           'Checking for existing category failed - Category not found',
           {
-            id: params.id,
-            store_id: params.storeId,
+            id: category.id,
+            store_id: category.storeId
           },
         );
         throw new NotFoundException('Category not found');
+      }
+
+      if (category.storeId !== params.storeId) {
+        this.loggerService.warn('CATEGORY', 'service', 'Checking for existing category failed - Store ID not matched', {
+          id: category.id,
+          category_store_id: category.storeId,
+          params_store_id: params.storeId
+        })
+        throw new ForbiddenException(
+          'You do not have permission to access this banner',
+        );
       }
 
       this.loggerService.info(
@@ -377,55 +365,63 @@ export class CategoryService {
         'An unexpected error while checking existing category',
         {
           id: params.id,
-          store_id: params.storeId,
+          store_id: params.storeId
         },
       );
     }
   }
 
-  private async checkCategoryNameExists(params: {
-    storeId: number;
-    name: string;
-  }): Promise<void> {
+  private async checkCategoryNameExists(
+    name: string
+  ): Promise<void> {
     this.loggerService.info(
       'CATEGORY',
       'service',
       'Checking same category name',
       {
-        store_id: params.storeId,
-        name: params.name,
+        name
       },
     );
 
-    if (!params.storeId) {
+    if (!name) {
       this.loggerService.warn(
-        'Category',
+        'CATEGORY',
         'service',
-        'Checking for existing category name failed - Store ID is missing',
+        'Checking for existing category name failed - Category name is missing',
         {
-          store_id: params.storeId,
+          name,
         },
       );
-      throw new BadRequestException('Please insert Store ID');
+      throw new BadRequestException('Please insert category name');
     }
-
-    const category = await this.prismaService.category.findUnique({
-      where: {
-        storeId: params.storeId,
-        name: params.name,
-      },
-    });
-
-    if (category) {
-      this.loggerService.warn(
-        'Category',
-        'service',
-        'Checking for existing category name failed - Category with the same name already exists',
+    
+    try {
+      const category = await this.prismaService.category.findUnique({
+        where: {
+          name
+        },
+      });
+  
+      if (category) {
+        this.loggerService.warn(
+          'CATEGORY',
+          'service',
+          'Checking for existing category name failed - Category with the same name already exists',
+          {
+            name
+          },
+        );
+        throw new BadRequestException('This category already exists');
+      }
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'CATEGORY',
+        'An unexpected error occurred while checking existing category name',
         {
-          store_id: params.storeId,
+          name
         },
       );
-      throw new BadRequestException('This category already exists');
     }
   }
 }

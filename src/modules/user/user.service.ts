@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../common/prisma.service';
 import { ValidationService } from '../../common/validation.service';
@@ -15,9 +20,101 @@ export class UserService {
     private loggerService: LoggerService,
     private prismaService: PrismaService,
     private validationService: ValidationService,
-    private handleErrorService: handleErrorService
-  ) { }
-  
+    private handleErrorService: handleErrorService,
+  ) {}
+
+  async get(user: User): Promise<UserResponse> {
+    this.loggerService.info('USER', 'service', 'Fetching user data initiated', {
+      user_id: user.id,
+    });
+
+    try {
+      const currentUser = await this.checkExistingUser(user.email);
+
+      this.loggerService.info('USER', 'service', 'Fetching user data success', {
+        user_id: currentUser.id,
+      });
+
+      return this.toUserResponse(currentUser);
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'USER',
+        'An unexpected error occurred during fetching user data',
+      );
+    }
+  }
+
+  async update(user: User, request: UpdateUserRequest): Promise<UserResponse> {
+    this.loggerService.info('USER', 'service', 'Updating user data initiated', {
+      user_id: user.id,
+    });
+
+    try {
+      const updateRequest: UpdateUserRequest = this.validationService.validate(
+        UserValidation.UPDATE,
+        request,
+      );
+
+      const existingUser = await this.checkExistingUser(user.email);
+
+      const updatedUserData: Partial<User> =
+        await this.updatedUserData(updateRequest);
+
+      const updatedUser = await this.prismaService.user.update({
+        where: { email: existingUser.email },
+        data: updatedUserData,
+      });
+
+      this.loggerService.info('USER', 'service', 'Updating user data success', {
+        id: existingUser.id,
+        email: existingUser.email,
+      });
+
+      return this.toUserResponse(updatedUser);
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'USER',
+        'An unexpected error occurred during updating user data',
+        {
+          user_id: user.id,
+          email: user.email,
+        },
+      );
+    }
+  }
+
+  async logout(user: User): Promise<{ message: string; success: boolean }> {
+    this.loggerService.info('USER', 'service', 'User logout initiated', {
+      user_id: user.id,
+    });
+    try {
+      const existingUser = await this.checkExistingUser(user.email);
+
+      await this.prismaService.user.update({
+        where: { email: existingUser.email },
+        data: { refreshToken: null },
+      });
+
+      this.loggerService.info('USER', 'service', 'Logged out success');
+
+      return {
+        message: 'Log out successful',
+        success: true,
+      };
+    } catch (error) {
+      this.handleErrorService.service(
+        error,
+        'USER',
+        'An unexpected error occurred during logout',
+        {
+          user_id: user.id,
+        },
+      );
+    }
+  }
+
   private toUserResponse(user: User): UserResponse {
     return {
       id: user.id,
@@ -30,151 +127,91 @@ export class UserService {
     };
   }
 
-  async get(user: User): Promise<UserResponse> {
-    try {
-      this.loggerService.info('AUTH', 'service', 'Fetching user data initiated', {
-        user_id: user.id
-      });
-
-      const currentUser = await this.prismaService.user.findUnique({
-        where: { email: user.email },
-      });
-
-      if (!currentUser) {
-        throw new UnauthorizedException('User not found');
-      }
-
-      this.loggerService.info('AUTH', 'service', 'Fetching user data success', {
-        user_id: user.id
-      });
-
-      return this.toUserResponse(currentUser);
-    } catch (error) {
-      this.handleErrorService.service(error, 'USER', 'An unexpected error occurred during fetching user data');
-    }
-  }
-
-  async update(
-    user: User,
-    request: UpdateUserRequest,
-  ): Promise<UserResponse> {
-    this.loggerService.info('AUTH', 'service', 'Updating user data initiated', {
-      user_id: user.id
-    });
-    this.loggerService.debug('AUTH', 'service', 'Updating user data initiated', {
-      user_id: user.id,
-      request: JSON.stringify(request)
-    });
-
-    try {
-      const updateRequest: UpdateUserRequest = this.validationService.validate(
-        UserValidation.UPDATE,
-        request,
-      );
-
-      const existingUser = await this.prismaService.user.findUnique({
-        where: { email: user.email },
-      });
-
-      if (!existingUser) {
-        throw new NotFoundException('User not found');
-      }
-
-      const updatedUserData: Partial<User> = await this.updatedUserData(
-        updateRequest,
-      );
-
-      const updatedUser = await this.prismaService.user.update({
-        where: { email: user.email },
-        data: updatedUserData,
-      });
-
-      this.loggerService.info('AUTH', 'service', 'Updating user data success', {
-        user_id: user.id
-      });
-
-      return this.toUserResponse(updatedUser);
-    } catch (error) {
-      this.handleErrorService.service(error, 'USER', 'An unexpected error occurred during updating user data', {
-        user_id: user.id
-      });
-    }
-  }
-
-  async logout(user: User): Promise<{ message: string; success: boolean }> {
-    this.loggerService.info('AUTH', 'service', 'User logout initiated', {
-      user_id: user.id
-    });
-    try {
-      await this.prismaService.user.update({
-        where: { email: user.email },
-        data: { refreshToken: null },
-      });
-
-      this.loggerService.info('AUTH', 'service', 'Logged out success');
-
-      return {
-        message: 'Log out successful',
-        success: true,
-      };
-    } catch (error) {
-      this.handleErrorService.service(error, 'USER', 'An unexpected error occurred during logout', {
-        user_id: user.id
-      });
-    }
-  }
-
   async checkExistingUser(email: string): Promise<User> {
     this.loggerService.info(
       'USER',
       'service',
       'Checking user existence initiated',
-      {email}
+      { email },
     );
+
+    if (!email) {
+      this.loggerService.warn(
+        'USER',
+        'service',
+        'Checking for existing user failed - User email is missing',
+        {
+          email,
+        },
+      );
+      throw new BadRequestException('Please insert User email');
+    }
 
     try {
       const user = await this.prismaService.user.findUnique({
-        where: {email}
-      })
+        where: { email },
+      });
 
       if (!user) {
-        this.loggerService.info('USER', 'service', 'Checking for existing user failed - User not found', {
-          email
-        })
+        this.loggerService.info(
+          'USER',
+          'service',
+          'Checking for existing user failed - User not found',
+          {
+            email,
+          },
+        );
 
-        throw new NotFoundException('User not found')
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.email !== email) {
+        this.loggerService.warn(
+          'USER',
+          'service',
+          'Checking for existing user failed - User email not matched',
+          {
+            id: user.id,
+            email: user.email,
+            params_user_email: email,
+          },
+        );
+        throw new ForbiddenException(
+          'You do not have permission to access this user',
+        );
       }
 
       this.loggerService.info('USER', 'service', 'User existence verified', {
         id: user.id,
+        email: user.email,
       });
 
-      return user
+      return user;
     } catch (error) {
       this.handleErrorService.service(
         error,
         'USER',
         'An unexpected error occurred while checking existing user',
         {
-          email
+          email,
         },
       );
     }
   }
 
   private async updatedUserData(
-    updateRequest: UpdateUserRequest
+    updateRequest: UpdateUserRequest,
   ): Promise<Partial<User>> {
     const updatedUserData = Object.entries(updateRequest).reduce(
       async (accPromise, [key, value]) => {
         const acc = await accPromise;
         if (!value) return acc;
-        acc[key] = key === "password" ? await bcrypt.hash(value, 10) : value;
+        acc[key] = key === 'password' ? await bcrypt.hash(value, 10) : value;
         return acc;
       },
-      Promise.resolve({} as Partial<User>)
+      Promise.resolve({} as Partial<User>),
     );
-    
+
     return updatedUserData;
-  }  
+  }
 }

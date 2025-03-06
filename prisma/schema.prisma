@@ -87,6 +87,7 @@ model Address {
   user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, street])
+  @@unique([userId, street, city, province, country, postalCode])
   @@map("addresses")
 }
 
@@ -102,6 +103,7 @@ model Store {
   
   banners             Banner[]
   categories          Category[]
+  colors              Color[]
 
   @@index([userId])
   @@map("stores")
@@ -121,6 +123,7 @@ model Banner {
   
   @@index([storeId])
   @@index([publicId])
+  @@unique([storeId, name])
   @@map("banners")
 }
 
@@ -136,4 +139,19 @@ model Category {
   
   @@index([storeId])
   @@map("categories")
+}
+
+model Color {
+  id                  Int         @id                @default(autoincrement())
+  storeId             Int                            @map("store_id")
+  name                String      @unique
+  value               String      @unique
+  
+  createdAt           DateTime    @default(now())    @map("created_at")
+  updatedAt           DateTime    @updatedAt         @map("updated_at")
+
+  store               Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  @@index([storeId])
+  @@map("colors")
 }
