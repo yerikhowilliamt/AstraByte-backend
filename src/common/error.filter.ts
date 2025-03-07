@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   Logger,
+  HttpStatus,
 } from '@nestjs/common';
 import { ZodError } from 'zod';
 
@@ -15,25 +16,25 @@ export class ErrorFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse();
     const timestamp = new Date().toISOString();
 
-    const errors = this.formatErrors(exception);
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let errors: { field?: string; message: string }[] = [];
 
-    return response.status(400).json({
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      errors = this.handleHttpException(exception);
+    } else if (exception instanceof ZodError) {
+      status = HttpStatus.BAD_REQUEST;
+      errors = this.handleZodError(exception);
+    } else {
+      this.logger.error('Unexpected error:', exception);
+      errors = [{ message: 'Internal server error' }];
+    }
+
+    return response.status(status).json({
       success: false,
       errors,
       timestamp,
     });
-  }
-
-  private formatErrors(exception: any): { field?: string; message: string }[] {
-    if (exception instanceof HttpException) {
-      return this.handleHttpException(exception);
-    } else if (exception instanceof ZodError) {
-      return this.handleZodError(exception);
-    }
-
-    this.logger.error('Unexpected error:', exception);
-
-    return [{ message: 'Internal server error' }];
   }
 
   private handleHttpException(
@@ -43,7 +44,7 @@ export class ErrorFilter implements ExceptionFilter {
     this.logger.warn('HttpException detected');
 
     if (typeof responseBody === 'object' && 'errors' in responseBody) {
-      return (responseBody.errors as any[]).map((err) => ({
+      return (responseBody as any).errors.map((err: any) => ({
         field: err.path?.join('.') || 'unknown',
         message: err.message,
       }));

@@ -8,16 +8,16 @@ export class UserValidation {
         message: 'Name cannot be empty.',
       })
       .max(100)
-      .optional()
-      .default(''),
+      .default('')
+      .optional(),
     password: z
       .string()
       .min(1, {
         message: 'Password must be at least 8 characters long.',
       })
       .max(100)
-      .optional()
-      .default(''),
+      .default('')
+      .optional(),
     role: z.enum(['ADMIN', 'CUSTOMER']).optional(),
   });
 }

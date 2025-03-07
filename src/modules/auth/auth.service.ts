@@ -31,7 +31,7 @@ export class AuthService {
   ) {}
 
   async register(request: RegisterAuthRequest): Promise<UserResponse> {
-    this.loggerService.info('AUTH', 'service', 'Create user initiated')
+    this.loggerService.info('AUTH', 'service', 'Create user initiated');
 
     try {
       const registerRequest: RegisterAuthRequest =
@@ -52,7 +52,7 @@ export class AuthService {
 
       this.loggerService.info('AUTH', 'service', 'Created user succcess', {
         id: user.id,
-        name: user.email
+        name: user.email,
       });
 
       return {
@@ -70,9 +70,14 @@ export class AuthService {
       } else if (error instanceof BadRequestException) {
         throw error;
       } else {
-        this.loggerService.error('AUTH', 'service', 'An unexpected error occurred during registration', {
-          error: error.message,
-        });
+        this.loggerService.error(
+          'AUTH',
+          'service',
+          'An unexpected error occurred during registration',
+          {
+            error: error.message,
+          },
+        );
 
         throw new InternalServerErrorException(
           'Something went wrong during registration. Please try again.',
@@ -83,8 +88,8 @@ export class AuthService {
 
   async login(request: LoginAuthRequest): Promise<UserResponse> {
     this.loggerService.info('AUTH', 'service', 'User login attempt', {
-      email: request.email
-    })
+      email: request.email,
+    });
 
     try {
       const loginRequest: LoginAuthRequest = this.validationService.validate(
@@ -103,8 +108,16 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password.');
       }
 
-      const accessToken = this.generateAccessToken(user.id, user.email, user.role);
-      const refreshToken = this.generateRefreshToken(user.id, user.email, user.role);
+      const accessToken = this.generateAccessToken(
+        user.id,
+        user.email,
+        user.role,
+      );
+      const refreshToken = this.generateRefreshToken(
+        user.id,
+        user.email,
+        user.role,
+      );
 
       const encryptToken = this.encrypt(refreshToken);
       const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
@@ -115,8 +128,8 @@ export class AuthService {
       });
 
       this.loggerService.info('AUTH', 'service', 'User logged in success', {
-        user_id: user.id
-      })
+        user_id: user.id,
+      });
 
       return {
         id: user.id,
@@ -153,33 +166,24 @@ export class AuthService {
       provider_account_id: request.providerAccountId,
       provider: request.provider,
       name: request.name,
-    })
+    });
 
     try {
       const validateRequest: ValidateAuthRequest =
-        this.validationService.validate(
-          AuthValidation.VALIDATEUSER,
-          request,
-        );
+        this.validationService.validate(AuthValidation.VALIDATEUSER, request);
 
-      let account = await this.findAccount({ providerAccountId: validateRequest.providerAccountId, provider: validateRequest.provider});
-      this.loggerService.debug('AUTH', 'service', 'Account found', {
-        id: account.id,
-        user_id: account.userId,
-        provider_account_id: account.providerAccountId,
-        provider: account.provider,
-        refresh_token: account.refreshToken
-      })
-
-      this.loggerService.warn('AUTH', 'service', 'Account founded', {
-        id: account.id,
-        provider_account_id: account.providerAccountId,
-        provider: account.provider
-      })
+      let account = await this.findAccount({
+        providerAccountId: validateRequest.providerAccountId,
+        provider: validateRequest.provider,
+      });
 
       if (!account) {
         await this.checkExistingUserEmail(validateRequest.email);
-        this.loggerService.info('AUTH', 'service', 'Creating new account for user')
+        this.loggerService.info(
+          'AUTH',
+          'service',
+          'Creating new account for user',
+        );
 
         account = await this.prismaService.account.create({
           data: {
@@ -196,40 +200,55 @@ export class AuthService {
           },
         });
 
-        this.loggerService.debug('AUTH', 'service', 'Created new account success', {
-          id: account.id,
-          user_id: account.userId,
-          provider_account_id: account.providerAccountId,
-          provider: account.provider,
-          refresh_token: account.refreshToken,
-        })
+        this.loggerService.debug(
+          'AUTH',
+          'service',
+          'Created new account success',
+          {
+            id: account.id,
+            user_id: account.userId,
+            provider_account_id: account.providerAccountId,
+            provider: account.provider,
+            refresh_token: account.refreshToken,
+          },
+        );
 
-        this.loggerService.info('AUTH', 'service', 'Created new account success', {
-          id: account.id,
-          user_id: account.userId,
-          provider_account_id: account.providerAccountId,
-          provider: account.provider,
-        })
+        this.loggerService.info(
+          'AUTH',
+          'service',
+          'Created new account success',
+          {
+            id: account.id,
+            user_id: account.userId,
+            provider_account_id: account.providerAccountId,
+            provider: account.provider,
+          },
+        );
       }
 
-      const user = await this.findUserById(account.userId)
+      const user = await this.findUserById(account.userId);
 
       const accessToken = this.generateAccessToken(
         user.id,
         validateRequest.email,
-        user.role
+        user.role,
       );
 
       const refreshToken = this.generateRefreshToken(
         user.id,
         validateRequest.email,
-        user.role
+        user.role,
       );
 
-      this.loggerService.debug('AUTH', 'service', 'Generate access token & refresh token', {
-        access_token: accessToken,
-        refresh_token: refreshToken
-      })
+      this.loggerService.debug(
+        'AUTH',
+        'service',
+        'Generate access token & refresh token',
+        {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        },
+      );
 
       const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
@@ -238,7 +257,11 @@ export class AuthService {
         data: { refreshToken: hashedRefreshToken },
       });
 
-      this.loggerService.info('AUTH', 'service', 'Updated user with tokens success')
+      this.loggerService.info(
+        'AUTH',
+        'service',
+        'Updated user with tokens success',
+      );
 
       return account;
     } catch (error) {
@@ -247,18 +270,30 @@ export class AuthService {
       } else if (error instanceof BadRequestException) {
         throw error;
       } else {
-        this.loggerService.error('AUTH', 'service', 'Error during validation account', {
-          error: error.message,
-        })
-        throw new InternalServerErrorException('Something went wrong during validation account. Please try again');
+        this.loggerService.error(
+          'AUTH',
+          'service',
+          'Error during validation account',
+          {
+            error: error.message,
+          },
+        );
+        throw new InternalServerErrorException(
+          'Something went wrong during validation account. Please try again',
+        );
       }
     }
   }
 
   async generateNewAccessToken(refreshToken: string) {
-    this.loggerService.info('AUTH', 'service', 'Generate new access token initiated', {
-      refresh_token: refreshToken
-    })
+    this.loggerService.info(
+      'AUTH',
+      'service',
+      'Generate new access token initiated',
+      {
+        refresh_token: refreshToken,
+      },
+    );
 
     if (!refreshToken) {
       this.loggerService.warn(
@@ -266,7 +301,7 @@ export class AuthService {
         'service',
         'Generate new accress token failed - Refresh token is missing',
         {
-          refresh_token: refreshToken
+          refresh_token: refreshToken,
         },
       );
       throw new BadRequestException('Refresh token is missing');
@@ -280,8 +315,8 @@ export class AuthService {
       });
 
       this.loggerService.warn('AUTH', 'service', 'Payload ID', {
-        id: payload.id
-      })
+        id: payload.id,
+      });
 
       const user = await this.prismaService.user.findUnique({
         where: {
@@ -305,27 +340,48 @@ export class AuthService {
       );
 
       if (!isRefreshTokenMatched) {
-        this.loggerService.error('AUTH', 'service', 'Refresh token not match')
+        this.loggerService.error('AUTH', 'service', 'Refresh token not match');
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const newAccessToken = this.generateAccessToken(user.id, user.email, user.role);
-      
-      this.loggerService.debug('AUTH', 'service', 'Generated new access token success', {
-        access_token: newAccessToken
-      })
-      this.loggerService.info('AUTH', 'service', 'Generated new access token success')
+      const newAccessToken = this.generateAccessToken(
+        user.id,
+        user.email,
+        user.role,
+      );
+
+      this.loggerService.debug(
+        'AUTH',
+        'service',
+        'Generated new access token success',
+        {
+          access_token: newAccessToken,
+        },
+      );
+      this.loggerService.info(
+        'AUTH',
+        'service',
+        'Generated new access token success',
+      );
       return {
         accessToken: newAccessToken,
       };
     } catch (error) {
-      if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
 
-      this.loggerService.error('AUTH', 'service', 'Error during generate access token', {
-        error: error.message
-      })
+      this.loggerService.error(
+        'AUTH',
+        'service',
+        'Error during generate access token',
+        {
+          error: error.message,
+        },
+      );
 
       throw new InternalServerErrorException(
         'Something went wrong during generate access token. Please try again.',
@@ -334,9 +390,14 @@ export class AuthService {
   }
 
   private async checkExistingUserEmail(email: string): Promise<void> {
-    this.loggerService.info('AUTH', 'service', 'Checking existing user email initiated', {
-      email
-    });
+    this.loggerService.info(
+      'AUTH',
+      'service',
+      'Checking existing user email initiated',
+      {
+        email,
+      },
+    );
 
     if (!email) {
       this.loggerService.warn(
@@ -344,7 +405,7 @@ export class AuthService {
         'service',
         'Finding an user failed - User email is missing',
         {
-          email
+          email,
         },
       );
       throw new BadRequestException('User email is missing');
@@ -356,7 +417,7 @@ export class AuthService {
       });
 
       if (user) {
-        this.loggerService.error('AUTH', 'service', 'Email already registered')
+        this.loggerService.error('AUTH', 'service', 'Email already registered');
         throw new BadRequestException('This email is already registered.');
       }
     } catch (error) {
@@ -364,17 +425,29 @@ export class AuthService {
         throw error;
       }
 
-      this.loggerService.error('AUTH', 'service', 'Error checking if email exists', {
-        error: error.message
-      })
-      throw new InternalServerErrorException('Something went wrong during checking email. Please try again.');
+      this.loggerService.error(
+        'AUTH',
+        'service',
+        'Error checking if email exists',
+        {
+          error: error.message,
+        },
+      );
+      throw new InternalServerErrorException(
+        'Something went wrong during checking email. Please try again.',
+      );
     }
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
-    this.loggerService.info('AUTH', 'service', 'Finding user by email initiated', {
-      email
-    });
+    this.loggerService.info(
+      'AUTH',
+      'service',
+      'Finding user by email initiated',
+      {
+        email,
+      },
+    );
 
     if (!email) {
       this.loggerService.warn(
@@ -382,7 +455,7 @@ export class AuthService {
         'service',
         'Finding an user failed - User email is missing',
         {
-          email
+          email,
         },
       );
       throw new BadRequestException('User email is missing');
@@ -392,34 +465,40 @@ export class AuthService {
       const user = await this.prismaService.user.findUnique({
         where: { email },
       });
-  
+
       if (!user) {
         this.loggerService.warn('AUTH', 'service', 'User not found', {
-          email: user.email
-        })
+          email: user.email,
+        });
         throw new UnauthorizedException('Invalid email or password.');
       }
-  
+
       this.loggerService.info('AUTH', 'service', 'User found by email', {
         id: user.id,
-        email: user.email
-      })
+        email: user.email,
+      });
       return user;
     } catch (error) {
       if (error instanceof NotFoundException) {
-        throw error
+        throw error;
       }
-      this.loggerService.error('AUTH', 'service', 'Error finding user by their email', {
-        error: error.message
-      })
-      throw new InternalServerErrorException('Something went wrong during finding user. Please try again.');
+      this.loggerService.error(
+        'AUTH',
+        'service',
+        'Error finding user by their email',
+        {
+          error: error.message,
+        },
+      );
+      throw new InternalServerErrorException(
+        'Something went wrong during finding user. Please try again.',
+      );
     }
-    
   }
 
   async findUserById(id: number): Promise<UserResponse> {
     this.loggerService.info('AUTH', 'service', 'Finding user by id initiated', {
-      id
+      id,
     });
 
     if (!id) {
@@ -428,7 +507,7 @@ export class AuthService {
         'service',
         'Finding an account failed - User ID is missing',
         {
-          id
+          id,
         },
       );
       throw new BadRequestException('User ID is missing');
@@ -441,25 +520,33 @@ export class AuthService {
 
       if (!user) {
         this.loggerService.warn('AUTH', 'service', 'User not found', {
-          id: user.id
-        })
+          id: user.id,
+        });
         throw new NotFoundException('User not found.');
       }
 
-      const accessToken = this.generateAccessToken(user.id, user.email, user.role);
-      const refreshToken = this.generateRefreshToken(user.id, user.email, user.role);
+      const accessToken = this.generateAccessToken(
+        user.id,
+        user.email,
+        user.role,
+      );
+      const refreshToken = this.generateRefreshToken(
+        user.id,
+        user.email,
+        user.role,
+      );
 
-      const encryptedToken = this.encrypt(refreshToken)
-      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10)
+      const encryptedToken = this.encrypt(refreshToken);
+      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
       await this.prismaService.user.update({
         where: { id: user.id },
-        data: {refreshToken: hashedRefreshToken}
-      })
+        data: { refreshToken: hashedRefreshToken },
+      });
 
       this.loggerService.info('AUTH', 'service', 'User found by id', {
         id: user.id,
-      })
+      });
 
       return {
         id: user.id,
@@ -476,18 +563,33 @@ export class AuthService {
         throw error;
       }
 
-      this.loggerService.error('AUTH', 'service', 'Error finding user by their id', {
-        error: error.message
-      })
-      throw new InternalServerErrorException('Something went wrong during finding user. Please try again.');
+      this.loggerService.error(
+        'AUTH',
+        'service',
+        'Error finding user by their id',
+        {
+          error: error.message,
+        },
+      );
+      throw new InternalServerErrorException(
+        'Something went wrong during finding user. Please try again.',
+      );
     }
   }
 
-  async findAccount(params: {providerAccountId: string, provider: string}): Promise<Account | null> {
-    this.loggerService.info('AUTH', 'service', 'Finding existing account initiated', {
-      provider_account_id: params.providerAccountId,
-      provider: params.provider
-    });
+  async findAccount(params: {
+    providerAccountId: string;
+    provider: string;
+  }): Promise<Account | null> {
+    this.loggerService.info(
+      'AUTH',
+      'service',
+      'Finding existing account initiated',
+      {
+        provider_account_id: params.providerAccountId,
+        provider: params.provider,
+      },
+    );
 
     if (!params.provider || !params.providerAccountId) {
       this.loggerService.warn(
@@ -496,10 +598,12 @@ export class AuthService {
         'Finding an account failed - Account provider or provider account ID is missing',
         {
           provider_account_id: params.providerAccountId,
-          provider: params.provider
+          provider: params.provider,
         },
       );
-      throw new BadRequestException('Account provider or provider account ID is missing');
+      throw new BadRequestException(
+        'Account provider or provider account ID is missing',
+      );
     }
 
     try {
@@ -507,14 +611,23 @@ export class AuthService {
         where: {
           provider_providerAccountId: {
             providerAccountId: params.providerAccountId,
-            provider: params.provider
-        } },
+            provider: params.provider,
+          },
+        },
       });
-  
+
+      if (!account) {
+        this.loggerService.warn('AUTH', 'service', 'No account found', {
+          provider_account_id: params.providerAccountId,
+          provider: params.provider,
+        });
+        return null;
+      }
+
       this.loggerService.info('AUTH', 'service', 'Account found', {
-        id: account.id,
-        user_id: account.userId
-      })
+        providerAccountId: account.providerAccountId || null,
+        provider: account.provider || null,
+      });
       return account;
     } catch (error) {
       this.loggerService.error(
@@ -523,18 +636,24 @@ export class AuthService {
         'An unexpected error occurred while finding existing account',
         {
           provider_account_id: params.providerAccountId,
-          provider: params.provider
+          provider: params.provider,
         },
       );
 
-      throw new InternalServerErrorException('Something went wrong during finding account. Please try again.')
+      throw new InternalServerErrorException(
+        'Something went wrong during finding account. Please try again.',
+      );
     }
   }
 
-  private generateAccessToken(userId: number, email: string, role:string): string {
+  private generateAccessToken(
+    userId: number,
+    email: string,
+    role: string,
+  ): string {
     this.loggerService.info('AUTH', 'service', 'Created access token', {
       user_id: userId,
-    })
+    });
 
     if (!userId || !email || !role) {
       this.loggerService.warn(
@@ -544,7 +663,7 @@ export class AuthService {
         {
           userId,
           email,
-          role
+          role,
         },
       );
       throw new BadRequestException('User ID or email or role is missing');
@@ -559,10 +678,14 @@ export class AuthService {
     );
   }
 
-  private generateRefreshToken(userId: number, email: string, role: string): string {
+  private generateRefreshToken(
+    userId: number,
+    email: string,
+    role: string,
+  ): string {
     this.loggerService.info('AUTH', 'service', 'Created refresh token', {
       user_id: userId,
-    })
+    });
 
     if (!userId || !email || !role) {
       this.loggerService.warn(
@@ -572,7 +695,7 @@ export class AuthService {
         {
           userId,
           email,
-          role
+          role,
         },
       );
       throw new BadRequestException('User ID or email or role is missing');
@@ -598,7 +721,7 @@ export class AuthService {
         'service',
         'Encrypt token failed - Token is missing',
         {
-          token
+          token,
         },
       );
       throw new BadRequestException('Please insert a token');
@@ -607,7 +730,7 @@ export class AuthService {
     const cipher = crypto.createCipheriv(
       algorithm,
       Buffer.from(secretKey, 'hex'),
-      Buffer.from(iv, 'hex')
+      Buffer.from(iv, 'hex'),
     );
     let encrypted = cipher.update(token, 'utf-8', 'hex');
 
@@ -625,7 +748,7 @@ export class AuthService {
         'service',
         'Decrypt token failed - Token is missing',
         {
-          encryptedToken
+          encryptedToken,
         },
       );
       throw new BadRequestException('Please insert phone number');
@@ -635,7 +758,8 @@ export class AuthService {
     const decipher = crypto.createDecipheriv(
       algorithm,
       Buffer.from(secretKey, 'hex'),
-      Buffer.from(ivHex, 'hex'));
+      Buffer.from(ivHex, 'hex'),
+    );
     let decrypted = decipher.update(encrypted, 'hex', 'utf-8');
 
     decrypted += decipher.final('utf-8');

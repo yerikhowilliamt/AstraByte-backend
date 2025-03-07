@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -41,7 +42,8 @@ export class handleErrorService {
     if (
       error instanceof ZodError ||
       error instanceof BadRequestException ||
-      error instanceof NotFoundException
+      error instanceof NotFoundException ||
+      error instanceof ForbiddenException
     ) {
       throw error;
     } else {
@@ -51,7 +53,7 @@ export class handleErrorService {
         response_status: 500,
       });
       throw new InternalServerErrorException(
-        `Something went wrong. Please try again.`,
+        'Something went wrong. Please try again.',
       );
     }
   }

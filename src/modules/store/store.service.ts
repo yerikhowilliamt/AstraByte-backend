@@ -299,7 +299,7 @@ export class StoreService {
         'service',
         'Checking for existing store name failed - Store name is missing',
         {
-          name
+          name,
         },
       );
       throw new BadRequestException('Please insert Store name');

@@ -19,9 +19,7 @@ export class GoogleAuthGuard extends AuthGuard('google') {
       return activate;
     } catch (error) {
       console.error('Error in GoogleAuthGuard:', error.message);
-      throw new InternalServerErrorException(
-        'Failed to activate GoogleAuthGuard',
-      );
+      throw new InternalServerErrorException(error.message);
     }
   }
 

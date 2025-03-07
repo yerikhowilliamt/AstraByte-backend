@@ -25,32 +25,42 @@ export class AuthController {
   constructor(
     private loggerService: LoggerService,
     private authService: AuthService,
-    private handleErrorService: handleErrorService
+    private handleErrorService: handleErrorService,
   ) {}
 
   @Post('register')
   @HttpCode(201)
-  async register(@Body() request: RegisterAuthRequest): Promise<WebResponse<UserResponse>> {
+  async register(
+    @Body() request: RegisterAuthRequest,
+  ): Promise<WebResponse<UserResponse>> {
     try {
       const result = await this.authService.register(request);
-      this.loggerService.info('AUTH', 'controller', 'Registration new user success', {
-        user_id: result.id,
-        response_status: 201
-      });
+      this.loggerService.info(
+        'AUTH',
+        'controller',
+        'Registration new user success',
+        {
+          user_id: result.id,
+          response_status: 201,
+        },
+      );
       return response(result, 201);
     } catch (error) {
-      this.handleErrorService.controller(error, 'AUTH')
+      this.handleErrorService.controller(error, 'AUTH');
     }
   }
 
   @Post('login')
   @UseGuards(LocalAuthGuard)
   @HttpCode(200)
-  async login(@Body() request: LoginAuthRequest, @Res({ passthrough: true }) res: Response): Promise<WebResponse<UserResponse>> {
+  async login(
+    @Body() request: LoginAuthRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<WebResponse<UserResponse>> {
     this.loggerService.info('AUTH', 'controller', 'Login initiated', {
-      email: request.email
-    })
-    
+      email: request.email,
+    });
+
     try {
       const result = await this.authService.login(request);
 
@@ -72,12 +82,12 @@ export class AuthController {
 
       this.loggerService.info('AUTH', 'controller', 'Login Success', {
         user_id: result.id,
-        response_status: 200
-      })
+        response_status: 200,
+      });
 
       return response(data, 200);
     } catch (error) {
-      this.handleErrorService.controller(error, 'AUTH')
+      this.handleErrorService.controller(error, 'AUTH');
     }
   }
 
@@ -91,7 +101,7 @@ export class AuthController {
   @Get('google/redirect')
   @UseGuards(GoogleAuthGuard)
   @HttpCode(200)
-  async googleAuthRedirect(@Req() req, @Res() res: Response): Promise<void> {
+  async googleAuthRedirect(@Req() req, @Res() res: Response) {
     try {
       const { user } = req;
 
@@ -100,6 +110,7 @@ export class AuthController {
       }
 
       const result = await this.authService.findUserById(user.id);
+      
       res.cookie('access_token', result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -114,9 +125,42 @@ export class AuthController {
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
-      res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+      const redirectUrl =
+        req.query.redirectUrl ||
+        process.env.FRONTEND_URL ||
+        'http://localhost:3000';
+
+      const isValidRedirect = (url: string) => {
+        const allowedDomain =
+          process.env.FRONTEND_URL || 'http://localhost:3000';
+        return url.startsWith(allowedDomain);
+      };
+
+      let redirectAfterLogin = redirectUrl
+        ? decodeURIComponent(redirectUrl)
+        : process.env.FRONTEND_URL || 'http://localhost:3000';
+
+      if (!isValidRedirect(redirectAfterLogin)) {
+        redirectAfterLogin =
+          process.env.FRONTEND_URL || 'http://localhost:3000';
+      }
+
+      this.loggerService.info(
+        'AUTH',
+        'controller',
+        'Google login successfully',
+        {
+          id: result.id,
+          user_id: user.id,
+          name: result.name,
+          response_status: 201,
+          redirect_url: redirectAfterLogin
+        },
+      );
+
+      res.redirect(redirectAfterLogin);
     } catch (error) {
-      this.handleErrorService.controller(error, 'AUTH')
+      this.handleErrorService.controller(error, 'AUTH');
     }
   }
 
@@ -130,7 +174,8 @@ export class AuthController {
         throw new UnauthorizedException('Refresh token not found');
       }
 
-      const result = await this.authService.generateNewAccessToken(refreshToken);
+      const result =
+        await this.authService.generateNewAccessToken(refreshToken);
 
       res.cookie('access_token', result.accessToken, {
         httpOnly: true,
@@ -139,13 +184,20 @@ export class AuthController {
         maxAge: 15 * 60 * 1000,
       });
 
-      this.loggerService.info('AUTH', 'controller', 'Created new access token success', {
-        response_status: 200,
-      })
+      this.loggerService.info(
+        'AUTH',
+        'controller',
+        'Created new access token success',
+        {
+          response_status: 200,
+        },
+      );
 
-      return res.json(response({ message: 'Created new token successfully' }, 200));
+      return res.json(
+        response({ message: 'Created new token successfully' }, 200),
+      );
     } catch (error) {
-      this.handleErrorService.controller(error, 'AUTH')
+      this.handleErrorService.controller(error, 'AUTH');
     }
   }
 }

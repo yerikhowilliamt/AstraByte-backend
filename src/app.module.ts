@@ -9,9 +9,10 @@ import { BannerModule } from './modules/banner/banner.module';
 import { ImageModule } from './modules/image/image.module';
 import { CategoryModule } from './modules/category/category.module';
 import { ColorModule } from './modules/color/color.module';
+import { BrandModule } from './modules/brand/brand.module';
 
 @Module({
-  imports: [CommonModule, AuthModule, UserModule, ContactModule, AddressModule, StoreModule, BannerModule, ImageModule, CategoryModule, ColorModule],
+  imports: [CommonModule, AuthModule, UserModule, ContactModule, AddressModule, StoreModule, BannerModule, ImageModule, CategoryModule, ColorModule, BrandModule],
   controllers: [],
   providers: [],
 })

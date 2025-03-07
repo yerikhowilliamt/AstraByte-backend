@@ -289,7 +289,9 @@ export class ColorService {
         id: storeId,
         userId: user.id,
       });
+      
       const color = await this.checkExistingColor({ id, storeId: store.id });
+      
       await this.prismaService.color.delete({
         where: { id: color.id },
       });

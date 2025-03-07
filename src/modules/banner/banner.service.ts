@@ -176,6 +176,8 @@ export class BannerService {
         {
           user_id: user.id,
           store_id: storeId,
+          page,
+          limit,
         },
       );
     }
@@ -316,7 +318,7 @@ export class BannerService {
       const publicId = banner.publicId.toString();
 
       await this.prismaService.banner.delete({
-        where: { id: banner.id }
+        where: { id: banner.id },
       });
 
       await this.cloudinaryService.deleteImage(publicId);
@@ -363,10 +365,15 @@ export class BannerService {
     id: number;
     storeId: number;
   }): Promise<Banner> {
-    this.loggerService.info('BANNER', 'service', 'Check existing banner initiated', {
-      id: params.id,
-      store_id: params.storeId,
-    });
+    this.loggerService.info(
+      'BANNER',
+      'service',
+      'Check existing banner initiated',
+      {
+        id: params.id,
+        store_id: params.storeId,
+      },
+    );
 
     if (!params.id || !params.storeId) {
       this.loggerService.warn(
@@ -380,7 +387,7 @@ export class BannerService {
       );
       throw new BadRequestException('Please insert Banner ID and Store ID');
     }
-    
+
     try {
       const banner = await this.prismaService.banner.findUnique({
         where: { id: params.id },
@@ -450,7 +457,7 @@ export class BannerService {
         'Checking for existing banner name failed - Banner name or Store ID is missing',
         {
           name: params.name,
-          store_id: params.storeId
+          store_id: params.storeId,
         },
       );
       throw new BadRequestException('Please insert Banner name and Store ID');
